@@ -859,7 +859,7 @@ EOF
     log "Polling http://127.0.0.1:${PORT}/health for readiness..."
     local healthy=false
     for _ in $(seq 1 15); do
-        if curl -s -f -m 2 "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
+        if curl -s -f -m 2 "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1 || curl -s -f -m 2 "http://${bind_ip}:${PORT}/health" >/dev/null 2>&1; then
             healthy=true
             break
         fi

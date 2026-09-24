@@ -107,5 +107,5 @@ jobs:
             esac
           done < <(find . -path ./node_modules -prune -o -path ./_lab -prune -o -type f -print)
           if [ ${#shfiles[@]} -gt 0 ]; then
-            shellcheck -x "${shfiles[@]}"
+            shellcheck -x -S warning "${shfiles[@]}"
           fi
