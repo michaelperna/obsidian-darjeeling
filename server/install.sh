@@ -794,9 +794,15 @@ EOF
     cp "$release_dir/units/darjeeling-tmux.service" "$tmux_unit"
     cp "$release_dir/units/darjeeling.service" "$srv_unit"
 
+    local user_home
+    user_home="$(getent passwd "$SERVICE_USER" 2>/dev/null | cut -d: -f6 || echo "")"
+    if [[ -z "$user_home" || ! -d "$user_home" ]]; then
+        user_home="/home/${SERVICE_USER}"
+    fi
+
     if [[ "$SERVICE_USER" != "darjeeling" ]]; then
         sed -i "s|User=darjeeling|User=${SERVICE_USER}|g" "$tmux_unit" "$srv_unit"
-        sed -i "s|HOME=/var/lib/darjeeling|HOME=/var/lib/${SERVICE_USER}|g" "$tmux_unit" "$srv_unit"
+        sed -i "s|HOME=/home/darjeeling|HOME=${user_home}|g" "$tmux_unit" "$srv_unit"
     fi
 
     if [[ "$VAULT_SYNC" == "obsidian-sync" && -f "$release_dir/units/darjeeling-vault-sync.service" ]]; then

@@ -7,9 +7,9 @@ After=network-online.target darjeeling-tmux.service tailscaled.service nordvpnd.
 User=darjeeling
 WorkingDirectory=/opt/darjeeling/current
 EnvironmentFile=/etc/darjeeling/darjeeling.env
-Environment=HOME=/var/lib/darjeeling TMUX_TMPDIR=/var/lib/darjeeling/run
+Environment=HOME=/home/darjeeling TMUX_TMPDIR=/var/lib/darjeeling/run
 Environment=PYTHONPATH=/opt/darjeeling/current
-Environment=PATH=/var/lib/darjeeling/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/home/darjeeling/.local/bin:/var/lib/darjeeling/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/opt/darjeeling/current/venv/bin/python -m darjeeling_server
 Restart=on-failure
 RestartSec=3
