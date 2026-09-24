@@ -1,0 +1,15 @@
+[Unit]
+Description=Darjeeling terminal sessions (tmux)
+After=network.target
+
+[Service]
+Type=forking
+User=darjeeling
+Environment=HOME=/var/lib/darjeeling TMUX_TMPDIR=/var/lib/darjeeling/run
+ExecStart=/usr/bin/tmux -L darjeeling -f /opt/darjeeling/current/tmux.conf new-session -d -s _keepalive
+ExecStop=/usr/bin/tmux -L darjeeling kill-server
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

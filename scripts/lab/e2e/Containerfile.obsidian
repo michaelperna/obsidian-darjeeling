@@ -1,0 +1,20 @@
+# Darjeeling E2E spike image: real Obsidian desktop (the .deb, so no AppImage
+# FUSE problem; its Depends miss libgbm1 & co under --no-install-recommends,
+# hence the explicit Electron runtime libs) under Xvfb, Node 22 for the Playwright driver, Python 3.11 +
+# tmux for a local Darjeeling server with the fake agents.
+ARG BASE=docker.io/library/node:22-bookworm
+FROM ${BASE}
+ARG OBSIDIAN_VERSION=1.13.7
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      xvfb xauth python3 python3-venv tmux procps fonts-dejavu-core \
+      libgbm1 libasound2 libnss3 libgtk-3-0 libxss1 libxtst6 libsecret-1-0 \
+      libnotify4 libatspi2.0-0 libdrm2 libxkbcommon0 libxshmfence1 libuuid1 \
+ && curl -fsSL -o /tmp/obsidian.deb \
+      "https://github.com/obsidianmd/obsidian-releases/releases/download/v${OBSIDIAN_VERSION}/obsidian_${OBSIDIAN_VERSION}_amd64.deb" \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends /tmp/obsidian.deb \
+ && rm -f /tmp/obsidian.deb && apt-get clean && rm -rf /var/lib/apt/lists/*
+# Driver deps live outside /work so the synced tree stays clean.
+RUN mkdir -p /opt/e2e && cd /opt/e2e && npm init -y >/dev/null \
+ && npm install --no-audit --no-fund playwright-core@1 axe-core@4 >/dev/null
+ENV OBSIDIAN_VERSION=${OBSIDIAN_VERSION} npm_config_update_notifier=false LANG=C.UTF-8

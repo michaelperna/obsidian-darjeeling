@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Fake Antigravity CLI for Darjeeling tests. See ../fake_agent.py.
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FAKE_AGENT_FLAVOUR=agy exec python3 "$here/../fake_agent.py" "$@"

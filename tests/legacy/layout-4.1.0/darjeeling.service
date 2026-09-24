@@ -1,0 +1,17 @@
+[Unit]
+Description=Project Darjeeling Remote Execution Server
+After=network-online.target nordvpnd.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=darjeeling
+WorkingDirectory=/home/darjeeling/darjeeling-server
+EnvironmentFile=-/home/darjeeling/darjeeling-server/config.env
+Environment="PATH=/usr/local/bin:/usr/bin:/bin:/home/darjeeling/.bun/bin:/home/darjeeling/.local/bin"
+ExecStart=/home/darjeeling/darjeeling-server/venv/bin/python /home/darjeeling/darjeeling-server/server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

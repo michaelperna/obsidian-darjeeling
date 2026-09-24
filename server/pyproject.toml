@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "darjeeling-server"
+version = "1.0.0"
+description = "Project Darjeeling Remote Execution Server"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110.0,<0.116.0",
+    "uvicorn[standard]>=0.28.0,<0.35.0",
+    "websockets>=12.0,<15.0",
+    "httpx>=0.27.0,<0.29.0",
+    "pydantic>=2.0.0,<3.0.0",
+]
+
+[project.scripts]
+darjeeling-server = "darjeeling_server.app:main"

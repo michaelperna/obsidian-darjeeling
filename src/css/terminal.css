@@ -1,0 +1,179 @@
+/* ==========================================================================
+   Terminal
+   ========================================================================== */
+
+.dj-terminal-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  box-sizing: border-box;
+  gap: 8px;
+  padding: 6px 10px;
+  background-color: var(--dj-surface-sunken);
+  border-bottom: 1px solid var(--dj-border);
+}
+
+.dj-terminal-toolbar .dj-select {
+  flex: 1;
+  max-width: 260px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.dj-terminal-toolbar .dj-btn {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.dj-terminal-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-family: var(--dj-font-mono);
+  font-size: 11px;
+  color: var(--dj-text-faint);
+}
+
+.dj-terminal-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--dj-text-faint);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dj-terminal-status.is-running .dj-terminal-dot {
+  background-color: var(--dj-ok);
+  box-shadow: 0 0 6px var(--dj-ok-wash, rgba(138, 168, 138, 0.5));
+}
+
+.dj-terminal-status.is-running {
+  color: var(--dj-ok);
+}
+
+.dj-terminal-session-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dj-terminal-session-bar.is-hidden {
+  display: none !important;
+}
+
+.dj-terminal-session-bar .dj-select {
+  max-width: 180px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.dj-terminal-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 7px 4px 4px 9px;
+  background-color: var(--dj-soil-900);
+  overflow: hidden;
+}
+
+.theme-light .dj-terminal-host { background-color: var(--dj-bg); }
+
+.dj-terminal-host .xterm { height: 100%; padding: 0; }
+
+.dj-terminal-host .xterm-viewport {
+  background-color: transparent !important;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dj-leaf-600) transparent;
+}
+
+.dj-terminal-host .xterm-viewport::-webkit-scrollbar { width: 10px; }
+
+.dj-terminal-host .xterm-viewport::-webkit-scrollbar-thumb {
+  background-color: var(--dj-leaf-600);
+  border-radius: var(--dj-r-pill);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+.dj-keybar {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 5px;
+  padding: 7px 9px;
+  overflow-x: auto;
+  background-color: var(--dj-surface-sunken);
+  border-top: 1px solid var(--dj-border);
+  scrollbar-width: none;
+}
+
+.dj-keybar::-webkit-scrollbar { display: none; }
+
+.dj-key {
+  flex: 0 0 auto;
+  min-width: 43px;
+  height: 35px;
+  font-family: var(--dj-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dj-text-muted);
+  background-color: var(--dj-leaf-700);
+  border: 1px solid var(--dj-border);
+  border-radius: var(--dj-r-md);
+  cursor: pointer;
+  transition: background-color var(--dj-fast) var(--dj-ease),
+    color var(--dj-fast) var(--dj-ease), border-color var(--dj-fast) var(--dj-ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.theme-light .dj-key { background-color: var(--dj-surface-raised); }
+
+.dj-key:active {
+  color: var(--dj-accent-bright);
+  border-color: var(--dj-accent-edge);
+  background-color: var(--dj-accent-wash);
+}
+
+.dj-key-wide {
+  min-width: 58px;
+  font-family: var(--dj-font-ui);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--dj-accent-bright);
+  border-color: var(--dj-accent-edge);
+}
+
+.theme-light .dj-key-wide { color: var(--dj-accent); }
+
+.dj-key-wide:active { background: var(--dj-accent-wash); }
+
+.dj-key-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dj-keybar.is-hidden {
+  display: none !important;
+}
+
+.dj-key.is-active {
+  color: var(--dj-accent-bright);
+  background-color: var(--dj-accent-wash);
+  border-color: var(--dj-accent-edge);
+}
+
+.dj-key.is-locked {
+  color: var(--dj-text-on-accent);
+  background-color: var(--dj-accent);
+  border-color: var(--dj-accent-bright);
+  box-shadow: 0 0 6px var(--dj-accent-wash);
+}
+
+.dj-terminal-scratch {
+  position: fixed;
+  opacity: 0;
+  pointer-events: none;
+}
+

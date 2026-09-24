@@ -1,0 +1,55 @@
+# --- Secrets & credentials (NEVER commit) ---
+# Server runtime config carries the bearer token.
+server/config.env
+server/.token
+.env
+.env.*
+!.env.example
+# Claude Code OAuth credentials + trust state. Copying these between machines
+# breaks (refresh tokens rotate on use), and committing them is a leak.
+.credentials.json
+.claude.json
+# Obsidian plugin runtime data (API keys, server token), e.g. when the repo is
+# developed inside a vault's plugins folder.
+data.json
+# Any private key material. Named key files only: a bare `id_*` would also hide
+# source files such as id_utils.ts.
+*.pem
+*.key
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+# DeepSeek continuity sessions are conversation transcripts — personal data.
+server/deepseek_sessions/
+server/deepseek_sessions.json
+
+# --- Build artifacts (rebuilt by `npm run build`, never hand-edited) ---
+node_modules/
+/main.js
+/styles.css
+dist/
+*.js.map
+*.tgz
+coverage/
+
+# --- Python ---
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+server/venv/
+
+# --- Editors / OS noise ---
+.vscode/
+.idea/
+*.swp
+*.bak
+*.orig
+*.log
+.DS_Store
+Thumbs.db
+
+# --- Test and lab artifacts ---
+tests/e2e/*-output/
+_lab/

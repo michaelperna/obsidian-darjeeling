@@ -1,0 +1,9 @@
+# scrub-guard allowlist
+# Format: <file_glob>:<line_regex>
+# Lines matching both are not reported. Comments and blank lines are ignored.
+# Never put private patterns here: this file is published.
+
+# The author's name is public by design in package metadata and the license.
+LICENSE:^Copyright
+manifest.json:"author"
+package.json:"author"

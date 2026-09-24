@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Project Darjeeling — Visual QA &amp; Accessibility Harness</title>
+  <link rel="stylesheet" href="themes.css" />
+  <link rel="stylesheet" href="app.css" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    #stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+  </style>
+</head>
+<body class="theme-default theme-dark">
+  <div id="stage" class="darjeeling-root">
+    <!-- 1. Header Surface -->
+    <header class="dj-header" role="banner">
+      <div class="dj-header-row">
+        <div class="dj-header-leading">
+          <button class="dj-chip-pill dj-status-chip is-connected" type="button" aria-label="Runtime: Remote Companion (Meshnet)">
+            <span class="dj-status-dot" aria-hidden="true"></span>
+            <span class="dj-chip-text">Remote</span>
+          </button>
+          <span class="dj-meta-pill">claude-3-7-sonnet</span>
+        </div>
+        <div class="dj-header-trailing">
+          <button class="dj-btn dj-btn-icon clickable-icon" type="button" aria-label="New session">
+            <span aria-hidden="true">➕</span>
+          </button>
+          <button class="dj-btn dj-btn-icon clickable-icon" type="button" aria-label="Session history">
+            <span aria-hidden="true">📜</span>
+          </button>
+          <button class="dj-btn dj-btn-icon clickable-icon" type="button" aria-label="Plan and roadmap">
+            <span aria-hidden="true">🗺️</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 2. Message History Surface -->
+    <main class="dj-messages" role="main" aria-label="Conversation History">
+      <!-- Attached note banner -->
+      <div class="dj-attached-note-banner">
+        <span class="dj-note-icon" aria-hidden="true">📄</span>
+        <span class="dj-note-title">Garden plan.md</span>
+        <span class="dj-meta-pill">Active Note</span>
+      </div>
+
+      <!-- User message -->
+      <article class="dj-msg is-user">
+        <div class="dj-msg-body">
+          <p>Please review my raised bed layout for the 2026 spring planting season and verify companion planting synergies.</p>
+        </div>
+      </article>
+
+      <!-- Assistant message with thinking & tool sheet -->
+      <article class="dj-msg is-assistant">
+        <!-- Collapsible thinking block -->
+        <details class="dj-thought-disclosure" open>
+          <summary class="dj-thought-summary" aria-label="Thinking process">
+            <span class="dj-thought-icon" aria-hidden="true">💭</span>
+            <span>Reasoning (1.2s)</span>
+          </summary>
+          <div class="dj-thought-body">
+            <p>Inspecting notes on raised beds 1 and 2. Checking brassica and solanaceae spacing along with pest deterrent plants like basil and marigolds.</p>
+          </div>
+        </details>
+
+        <!-- Tool execution sheet -->
+        <section class="dj-tool-sheet" aria-label="Tool execution: Read Vault Note">
+          <header class="dj-tool-sheet-header">
+            <span class="dj-tool-icon" aria-hidden="true">🔧</span>
+            <span class="dj-tool-name">vault_read</span>
+            <span class="dj-meta-pill">Completed</span>
+          </header>
+          <div class="dj-tool-sheet-body">
+            <pre><code>Reading: Garden plan.md (Raised Bed 1: Spinach, Lettuce, Kale)</code></pre>
+          </div>
+        </section>
+
+        <!-- Markdown body -->
+        <div class="dj-msg-body dj-markdown">
+          <p>Your garden layout looks well-structured! Here are key recommendations:</p>
+          <ul>
+            <li><strong>Tomatoes &amp; Basil:</strong> Excellent synergy; basil enhances tomato vigour and deters hornworms.</li>
+            <li><strong>Brassicas:</strong> Ensure adequate row spacing (30cm) for Lacinato Kale to avoid mildew.</li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- Milestone Progress Card (Plan UI) -->
+      <section class="dj-plan-summary" aria-label="Current Milestone Progress">
+        <header class="dj-plan-header">
+          <span class="dj-plan-title">Sprint 3: Mobile &amp; Design Architecture</span>
+          <span class="dj-meta-pill">In Progress</span>
+        </header>
+        <div class="dj-plan-progress" role="progressbar" aria-label="Milestone completion progress" aria-valuenow="85" aria-valuemin="0" aria-valuemax="100">
+          <div class="dj-plan-progress-fill" style="width: 85%;"></div>
+        </div>
+        <p class="dj-plan-meta">6 of 7 work packages completed</p>
+      </section>
+    </main>
+
+    <!-- 3. Offline / Fallback Card (hidden by default) -->
+    <aside class="dj-banner dj-banner-warn dj-hidden" aria-label="Connection Status">
+      <div class="dj-banner-body">
+        <span class="dj-banner-icon" aria-hidden="true">⚠️</span>
+        <div class="dj-banner-text">
+          <strong class="dj-banner-title">Host unreachable</strong>
+          <p class="dj-banner-desc">Meshnet host <code>100.64.0.1</code> timed out. Switch to Direct API?</p>
+        </div>
+        <div class="dj-banner-actions">
+          <button class="dj-btn" type="button">Direct API</button>
+          <button class="dj-btn dj-btn-accent" type="button">Retry</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 4. Composer Surface -->
+    <footer class="dj-composer" role="region" aria-label="Message Composer">
+      <div class="dj-chips">
+        <button class="dj-chip" type="button" aria-label="Attach active note">
+          <span aria-hidden="true">📎</span> Garden plan.md
+        </button>
+        <button class="dj-chip" type="button" aria-label="Permission mode: Plan">
+          <span>Plan</span>
+        </button>
+      </div>
+      <div class="dj-composer-row">
+        <label for="dj-input" class="visually-hidden">Ask or instruct your companion agent</label>
+        <textarea
+          id="dj-input"
+          class="dj-input"
+          placeholder="Ask or instruct Darjeeling..."
+          rows="1"
+          aria-multiline="true"
+        ></textarea>
+        <button class="dj-btn dj-btn-accent" type="button" aria-label="Send prompt">
+          <span aria-hidden="true">➔</span>
+        </button>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

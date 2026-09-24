@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#1F2E22"/>
+      <stop offset="0.55" stop-color="#141915"/>
+      <stop offset="1" stop-color="#241F16"/>
+    </linearGradient>
+    <linearGradient id="liquor" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#F4E9D2"/>
+      <stop offset="0.38" stop-color="#E6CE92"/>
+      <stop offset="0.72" stop-color="#E0822E"/>
+      <stop offset="1" stop-color="#A65E28"/>
+    </linearGradient>
+    <linearGradient id="sideleaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#93BE8A"/>
+      <stop offset="0.6" stop-color="#6B9C6B"/>
+      <stop offset="1" stop-color="#3A5340"/>
+    </linearGradient>
+    <linearGradient id="hair" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#D8DCCF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#F5F8F0" stop-opacity="0.95"/>
+    </linearGradient>
+    <clipPath id="tile">
+      <rect width="64" height="64" rx="14.0" ry="14.0"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#tile)">
+    <rect width="64" height="64" fill="url(#ground)"/>
+
+    <!-- Terraces: three ridges receding, paler as they go back. -->
+    <g fill="#6B9C6B" opacity="0">
+      <path d="M 0,51 Q 18,45 33,49
+               Q 50,54 64,47 L 64,64 L 0,64 Z"
+            opacity="0.10"/>
+      <path d="M 0,56 Q 20,51 37,55
+               Q 52,59 64,54 L 64,64 L 0,64 Z"
+            opacity="0.14"/>
+      <path d="M 0,61 Q 24,57 42,60
+               Q 55,62 64,59 L 64,64 L 0,64 Z"
+            opacity="0.18"/>
+    </g>
+
+    <g transform="translate(32.0 33.3) scale(1.0200) translate(-32 -32)">
+      <!-- Side leaves sit behind the bud. -->
+      <path d="M 32.00,48.00 Q 26.77,34.39 12.30,32.61 Q 17.53,46.21 32.00,48.00 Z" fill="url(#sideleaf)"/>
+      <path d="M 32.00,48.00 Q 46.47,46.21 51.70,32.61 Q 37.23,34.39 32.00,48.00 Z" fill="url(#sideleaf)"/>
+      <!-- The bud: brewed-liquor gradient, cream at the tip. -->
+      <path d="M 32.00,52.00 Q 39.02,38.50 32.00,25.00 Q 24.98,38.50 32.00,52.00 Z" fill="url(#liquor)"/>
+      <!-- Silver hair down the lit edge of the bud. -->
+      <path d="M 32.00,52.00 Q 39.02,38.50 32.00,25.00 Q 24.98,38.50 32.00,52.00 Z" fill="none" stroke="url(#hair)" stroke-width="1.4"/>
+      <!-- Midrib, knocked back so it reads as a fold not a line. -->
+      <path d="M 32.00,52.00 L 32.00,28.78" stroke="#7A4A18" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>
+      <path d="M 32,52 L 32,57" stroke="#8A5A22" stroke-width="3.4" stroke-linecap="round"/>
+    </g>
+  </g>
+</svg>

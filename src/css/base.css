@@ -1,0 +1,330 @@
+/* ==========================================================================
+   PROJECT DARJEELING — Responsive Baseline, Touch & Ergonomics
+   --------------------------------------------------------------------------
+   Container queries drive sidebar responsiveness (DM-43).
+   A single (pointer: coarse) media query establishes the 44px hit baseline (DM-06).
+   Hover rules are gated to fine pointer environments (DM-21, DM-46).
+   Comprehensive reduced-motion rules protect accessibility (DM-22).
+   Focus ring token and forced-colors media query support a11y (DM-38).
+   ========================================================================== */
+
+/* ================= Keyframe Definitions ================= */
+@keyframes dj-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes dj-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ================= Focus & Forced Colors (DM-38) ================= */
+.darjeeling-root :focus-visible {
+  outline: var(--dj-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .darjeeling-root .dj-btn,
+  .darjeeling-root .dj-tab,
+  .darjeeling-root .dj-header-btn,
+  .darjeeling-root .dj-chip {
+    forced-color-adjust: none;
+    outline: 1px solid ButtonText;
+  }
+  .darjeeling-root :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
+
+/* ================= Gated Hover Baseline (DM-21, DM-46) ================= */
+@media (hover: hover) and (pointer: fine) {
+  .darjeeling-root .dj-btn:hover,
+  .darjeeling-root .dj-header-btn:hover,
+  .darjeeling-root .dj-tab:hover,
+  .darjeeling-root .dj-chip:hover {
+    background: var(--background-modifier-hover);
+  }
+}
+
+/* ================= Reduced Motion Baseline (DM-22) ================= */
+@media (prefers-reduced-motion: reduce) {
+  .darjeeling-root,
+  .darjeeling-root *,
+  .darjeeling-root *::before,
+  .darjeeling-root *::after,
+  .modal-container:has(.dj-modal) *,
+  .dj-modal,
+  .dj-tea-cup-anim,
+  .dj-swirling-teacup * {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+    scroll-behavior: auto;
+  }
+}
+
+/* ================= Container Queries: Sidebar Responsiveness ================= */
+
+@container darjeeling (max-width: 620px) {
+  .dj-header-row {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    column-gap: 6px;
+    padding: 8px 10px 6px 10px;
+    min-height: auto;
+  }
+
+  .dj-mark {
+    order: 1;
+    flex: 0 0 auto;
+  }
+
+  .dj-spacer {
+    order: 2;
+    flex: 1 1 auto;
+    min-width: 6px;
+  }
+
+  .dj-header-actions {
+    order: 3;
+    flex: 0 0 auto;
+    gap: 4px;
+    margin-left: auto;
+  }
+
+  .dj-header-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--dj-r-md, 6px);
+  }
+
+  .dj-header-btn svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .dj-tabs {
+    order: 4;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 3px;
+    border-radius: var(--dj-r-pill, 999px);
+    box-sizing: border-box;
+    gap: 2px;
+  }
+
+  .dj-tab {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    padding: 5px 6px;
+    font-size: var(--dj-font-size-ui, 12px);
+    gap: 5px;
+    border-radius: var(--dj-r-pill, 999px);
+  }
+
+  .dj-status span:not(.dj-status-dot) {
+    display: none;
+  }
+  .dj-status {
+    padding: 3px 7px;
+  }
+}
+
+@container darjeeling (max-width: 520px) {
+  .dj-composer-quick-chips {
+    display: flex;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    max-width: 100%;
+    padding-bottom: 2px;
+  }
+  .dj-composer-quick-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dj-composer-island {
+    margin: 4px 6px 6px 6px;
+    padding: 6px 8px;
+    padding-bottom: calc(6px + var(--view-bottom-spacing, 0px) + env(safe-area-inset-bottom, 0px));
+    border-radius: var(--dj-r-xl, 12px);
+    gap: 4px;
+  }
+
+  .dj-context-capsule {
+    padding: 2px 6px;
+    font-size: var(--dj-font-size-mono, 11px);
+    gap: 4px;
+    border-radius: var(--dj-r-md, 6px);
+  }
+
+  .dj-context-capsule .dj-pill-label {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dj-composer-textarea {
+    font-size: 16px;
+    min-height: 32px;
+    max-height: 96px;
+    padding: 2px 4px;
+  }
+
+  .dj-send-circle-btn,
+  .dj-stop-circle-btn {
+    min-width: 44px;
+    min-height: 44px;
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@container darjeeling (max-width: 460px) {
+  .dj-mark-sub {
+    display: none;
+  }
+  .dj-mark-label {
+    display: inline-block;
+    font-size: var(--dj-font-size-ui, 12.5px);
+  }
+  .dj-select {
+    max-width: 120px;
+  }
+  .dj-msg.is-user {
+    max-width: 94%;
+  }
+  .dj-messages,
+  .dj-plan,
+  .dj-host {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .dj-header-btn {
+    width: 30px;
+    height: 30px;
+  }
+  .dj-header-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+@container darjeeling (max-width: 340px) {
+  .dj-mark-label {
+    display: none;
+  }
+  .dj-mark-icon {
+    display: inline-flex;
+  }
+  .dj-tab-label {
+    display: none;
+  }
+}
+
+/* Composer Island Focus State (Compact on keyboard focus) */
+.darjeeling-root .dj-composer-island:focus-within {
+  margin-bottom: 2px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+/* ================= Global Baseline: Touch Ergonomics (DM-06) ================= */
+@media (pointer: coarse) {
+  .darjeeling-root .dj-btn,
+  .darjeeling-root button.dj-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px 14px;
+    font-size: var(--dj-font-size-ui, 13px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .darjeeling-root .dj-btn-icon,
+  .darjeeling-root .dj-header-btn {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .darjeeling-root .dj-tab {
+    min-height: 44px;
+    padding: 6px 10px;
+    font-size: var(--dj-font-size-ui, 12px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+  }
+
+  .darjeeling-root .dj-tab > * {
+    pointer-events: none;
+  }
+
+  .darjeeling-root .dj-chip {
+    min-height: 44px;
+    padding: 6px 14px;
+    font-size: var(--dj-font-size-ui, 13px);
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .darjeeling-root .dj-quick-chip {
+    min-height: 28px;
+    padding: 2px 8px;
+    font-size: var(--dj-font-size-mono, 11px);
+  }
+
+  .darjeeling-root .dj-select,
+  .darjeeling-root .dj-input {
+    min-height: 44px;
+    font-size: var(--dj-font-size-ui, 13px);
+  }
+
+  .darjeeling-root .dj-msg-actions {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .darjeeling-root .dj-msg-copy {
+    opacity: 0.85;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .darjeeling-root .dj-plan-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .darjeeling-root .dj-plan-actions .dj-btn {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 130px;
+  }
+}

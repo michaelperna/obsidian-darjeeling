@@ -1,0 +1,9 @@
+[allowlist]
+description = "Global allowlist for build artifacts and false positives"
+paths = [
+    '''main\.js$''',
+    '''styles\.css$'''
+]
+regexes = [
+    '''TwoKeyMap''',
+]

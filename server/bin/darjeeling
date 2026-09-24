@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Project Darjeeling CLI Management Wrapper
+set -euo pipefail
+
+CURRENT_DIR="/opt/darjeeling/current"
+PYTHON="${CURRENT_DIR}/venv/bin/python"
+
+if [[ ! -x "$PYTHON" ]]; then
+    PYTHON="$(command -v python3 || echo /usr/bin/python3)"
+fi
+
+export PYTHONPATH="/opt/darjeeling/current:${PYTHONPATH:-}"
+exec "$PYTHON" -m darjeeling_server.cli "$@"

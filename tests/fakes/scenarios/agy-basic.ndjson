@@ -1,0 +1,6 @@
+// Antigravity CLI native event shape (what normalize_agy_event translates).
+{"event":"init","conversation_id":"{{session_id}}","init":{"cwd":"{{cwd}}","tools":["view_file","run_command"],"permission_mode":"{{permission_mode}}"}}
+{"event":"step_update","conversation_id":"{{session_id}}","step_update":{"conversation_id":"{{session_id}}","step_type":"agent_response","state":"ACTIVE","step_index":0,"text_delta":"Looking at the vault."}}
+{"event":"step_update","conversation_id":"{{session_id}}","step_update":{"conversation_id":"{{session_id}}","step_type":"tool","state":"ACTIVE","step_index":1,"tool_name":"view_file","tool_info":{"name":"view_file","parameters":{"AbsolutePath":"{{cwd}}/README.md"}}}}
+{"event":"step_update","conversation_id":"{{session_id}}","step_update":{"conversation_id":"{{session_id}}","step_type":"tool","state":"DONE","step_index":1,"tool_name":"view_file","tool_info":{"name":"view_file","output":"# Test vault"}}}
+{"event":"result","conversation_id":"{{session_id}}","result":{"conversation_id":"{{session_id}}","status":"SUCCESS","response":"Done.","duration_seconds":1.5,"num_turns":1,"usage":{"input_tokens":10,"output_tokens":5,"cache_read_tokens":0}}}

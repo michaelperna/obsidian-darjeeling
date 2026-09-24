@@ -1,0 +1,6 @@
+{
+  "baselineBytes": 650030,
+  "maxAllowedBytes": 682531,
+  "recordedAt": "2026-09-23T11:36:50.061Z",
+  "comment": "Recorded baseline for Sprint 1 (G-59). Fails if size grows > 5% without explicit bump."
+}

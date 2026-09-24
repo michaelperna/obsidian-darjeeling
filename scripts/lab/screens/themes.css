@@ -1,0 +1,171 @@
+/* themes.css -- Obsidian theme simulation tokens for Visual QA Matrix */
+
+/* Base reset and font defaults */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-interface, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  font-size: var(--dj-font-size-ui, 13px);
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+}
+
+/* 1. Default Obsidian Theme */
+.theme-default.theme-dark {
+  --background-primary: #1e1e1e;
+  --background-secondary: #252525;
+  --background-secondary-alt: #2a2a2a;
+  --background-primary-alt: #181818;
+  --background-modifier-border: #333333;
+  --background-modifier-border-focus: #555555;
+  --interactive-accent: #7b68ee;
+  --interactive-accent-hover: #8f7ef0;
+  --text-normal: #dcddde;
+  --text-muted: #999999;
+  --text-faint: #666666;
+  --text-on-accent: #ffffff;
+  --color-green: #4e7a52;
+  --color-yellow: #c48a28;
+  --color-red: #b83822;
+  --color-purple: #9b5c6b;
+  --color-blue: #7b68ee;
+}
+.theme-default.theme-light {
+  --background-primary: #ffffff;
+  --background-secondary: #f6f6f6;
+  --background-secondary-alt: #eeeeee;
+  --background-primary-alt: #fafafa;
+  --background-modifier-border: #e0e0e0;
+  --background-modifier-border-focus: #b0b0b0;
+  --interactive-accent: #6c5ce7;
+  --interactive-accent-hover: #7d6ff0;
+  --text-normal: #2e3338;
+  --text-muted: #666666;
+  --text-faint: #999999;
+  --text-on-accent: #ffffff;
+  --color-green: #3f6b45;
+  --color-yellow: #8a6a14;
+  --color-red: #a3351f;
+  --color-purple: #9b5c6b;
+  --color-blue: #6c5ce7;
+}
+
+/* 2. Minimal Theme (Kepano) */
+.theme-minimal.theme-dark {
+  --background-primary: #191919;
+  --background-secondary: #202020;
+  --background-secondary-alt: #262626;
+  --background-primary-alt: #141414;
+  --background-modifier-border: #2d2d2d;
+  --background-modifier-border-focus: #444444;
+  --interactive-accent: #d97706;
+  --interactive-accent-hover: #b45309;
+  --text-normal: #e5e5e5;
+  --text-muted: #a3a3a3;
+  --text-faint: #737373;
+  --text-on-accent: #ffffff;
+  --color-green: #4e7a52;
+  --color-yellow: #d97706;
+  --color-red: #b83822;
+  --color-purple: #9b5c6b;
+  --color-blue: #3b82f6;
+}
+.theme-minimal.theme-light {
+  --background-primary: #ffffff;
+  --background-secondary: #f4f4f5;
+  --background-secondary-alt: #e4e4e7;
+  --background-primary-alt: #fafafa;
+  --background-modifier-border: #e4e4e7;
+  --background-modifier-border-focus: #a1a1aa;
+  --interactive-accent: #d97706;
+  --interactive-accent-hover: #b45309;
+  --text-normal: #18181b;
+  --text-muted: #71717a;
+  --text-faint: #a1a1aa;
+  --text-on-accent: #ffffff;
+  --color-green: #3f6b45;
+  --color-yellow: #8a6a14;
+  --color-red: #a3351f;
+  --color-purple: #9b5c6b;
+  --color-blue: #2563eb;
+}
+
+/* 3. Things Theme */
+.theme-things.theme-dark {
+  --background-primary: #1c1d1f;
+  --background-secondary: #242528;
+  --background-secondary-alt: #2c2d31;
+  --background-primary-alt: #161718;
+  --background-modifier-border: #33353a;
+  --background-modifier-border-focus: #4b4e54;
+  --interactive-accent: #2e86de;
+  --interactive-accent-hover: #54a0ff;
+  --text-normal: #f1f2f6;
+  --text-muted: #a4b0be;
+  --text-faint: #747d8c;
+  --text-on-accent: #ffffff;
+  --color-green: #2ed573;
+  --color-yellow: #ffa502;
+  --color-red: #ff4757;
+  --color-purple: #9b5c6b;
+  --color-blue: #2e86de;
+}
+.theme-things.theme-light {
+  --background-primary: #ffffff;
+  --background-secondary: #f1f2f6;
+  --background-secondary-alt: #e4e7eb;
+  --background-primary-alt: #f8f9fa;
+  --background-modifier-border: #ced6e0;
+  --background-modifier-border-focus: #747d8c;
+  --interactive-accent: #2e86de;
+  --interactive-accent-hover: #1b6ca8;
+  --text-normal: #2f3542;
+  --text-muted: #57606f;
+  --text-faint: #a4b0be;
+  --text-on-accent: #ffffff;
+  --color-green: #2ed573;
+  --color-yellow: #ffa502;
+  --color-red: #ff4757;
+  --color-purple: #9b5c6b;
+  --color-blue: #2e86de;
+}
+
+/* 4. AnuPpuccin Theme */
+.theme-anuppuccin.theme-dark {
+  --background-primary: #1e1e2e;
+  --background-secondary: #181825;
+  --background-secondary-alt: #11111b;
+  --background-primary-alt: #14141e;
+  --background-modifier-border: #313244;
+  --background-modifier-border-focus: #45475a;
+  --interactive-accent: #cba6f7;
+  --interactive-accent-hover: #b4befe;
+  --text-normal: #cdd6f4;
+  --text-muted: #a6adc8;
+  --text-faint: #6c7086;
+  --text-on-accent: #11111b;
+  --color-green: #a6e3a1;
+  --color-yellow: #f9e2af;
+  --color-red: #f38ba8;
+  --color-purple: #cba6f7;
+  --color-blue: #89b4fa;
+}
+.theme-anuppuccin.theme-light {
+  --background-primary: #eff1f5;
+  --background-secondary: #e6e9ef;
+  --background-secondary-alt: #dce0e8;
+  --background-primary-alt: #e0e4eb;
+  --background-modifier-border: #ccd0da;
+  --background-modifier-border-focus: #acb0be;
+  --interactive-accent: #8839ef;
+  --interactive-accent-hover: #7287fd;
+  --text-normal: #4c4f69;
+  --text-muted: #6c6f85;
+  --text-faint: #9ca0b0;
+  --text-on-accent: #ffffff;
+  --color-green: #40a02b;
+  --color-yellow: #df8e1d;
+  --color-red: #d20f39;
+  --color-purple: #8839ef;
+  --color-blue: #1e66f5;
+}

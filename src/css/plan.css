@@ -1,0 +1,337 @@
+/* ==========================================================================
+   Plan / phases — muscatel, so spec work reads as a different mode
+   ========================================================================== */
+
+.dj-plan {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 13px 11px 18px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dj-leaf-600) transparent;
+}
+
+.dj-plan-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  height: 100%;
+  min-height: 220px;
+  text-align: center;
+  padding: 26px;
+  color: var(--dj-text-muted);
+  position: relative;
+  isolation: isolate;
+}
+
+/* Terraces behind the empty state: the hillside before anything is planted. */
+.dj-plan-empty::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 62%;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--dj-flush-500);
+  opacity: 0.22;
+  mask-image: var(--dj-tx-ridgeline);
+  -webkit-mask-image: var(--dj-tx-ridgeline);
+  mask-size: 100% 100%;
+  -webkit-mask-size: 100% 100%;
+  mask-position: bottom;
+  -webkit-mask-position: bottom;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+}
+
+.dj-plan-empty > * { position: relative; z-index: 1; }
+
+.dj-plan-empty-glyph {
+  width: 46px;
+  height: 46px;
+  font-size: 0;
+  color: transparent;
+  background-color: var(--dj-flush-500);
+  mask-image: var(--dj-mark);
+  -webkit-mask-image: var(--dj-mark);
+  mask-size: contain;
+  -webkit-mask-size: contain;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+}
+
+.dj-plan-empty-title { font-size: 14px; font-weight: 650; color: var(--dj-text); }
+
+.dj-plan-empty-body {
+  font-size: 12px;
+  max-width: 330px;
+  line-height: 1.6;
+}
+
+.dj-plan-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 13px;
+  margin-bottom: 11px;
+  border-radius: var(--dj-r-lg);
+  background-color: var(--dj-spec-wash);
+  border: 1px solid rgba(192, 126, 140, 0.38);
+  border-left: 3px solid var(--dj-muscatel-500);
+}
+
+.dj-plan-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--dj-text);
+  line-height: 1.4;
+}
+
+.dj-plan-meta {
+  font-size: 10.5px;
+  color: var(--dj-text-muted);
+  margin-top: 2px;
+  font-family: var(--dj-font-mono);
+}
+
+.dj-phase {
+  border: 1px solid var(--dj-border);
+  border-radius: var(--dj-r-lg);
+  background-color: var(--dj-surface);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.dj-phase.is-active { border-color: var(--dj-accent-edge); }
+
+.dj-phase.is-done { opacity: 0.68; }
+
+.dj-phase-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  cursor: pointer;
+  transition: background-color 0.18s var(--dj-ease);
+}
+
+.dj-phase-head:hover { background-color: var(--dj-accent-wash); }
+
+.dj-phase-num {
+  flex: 0 0 auto;
+  width: 21px;
+  height: 21px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--dj-text-muted);
+  background-color: var(--dj-surface-deep);
+  border: 1px solid var(--dj-border);
+}
+
+.dj-phase.is-active .dj-phase-num {
+  color: var(--dj-text-on-accent);
+  background-color: var(--dj-pekoe);
+  border-color: transparent;
+}
+
+.dj-phase.is-done .dj-phase-num {
+  color: var(--dj-text-on-accent);
+  background-color: var(--dj-flush-400);
+  border-color: transparent;
+}
+
+.dj-phase-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--dj-text);
+}
+
+.dj-phase-count {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-family: var(--dj-font-mono);
+  color: var(--dj-text-faint);
+}
+
+.dj-phase-body {
+  padding: 5px 12px 10px;
+  background-color: var(--dj-surface-sunken);
+  border-top: 1px solid var(--dj-border);
+}
+
+.dj-task {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--dj-border);
+}
+
+.dj-task:last-child { border-bottom: none; }
+
+.dj-task input[type="checkbox"] {
+  margin: 2px 0 0;
+  accent-color: var(--dj-accent);
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.dj-task-text { flex: 1 1 auto; min-width: 0; color: var(--dj-text); line-height: 1.5; }
+.dj-task.is-done .dj-task-text { color: var(--dj-text-faint); text-decoration: line-through; }
+
+.dj-task-file {
+  display: block;
+  font-family: var(--dj-font-mono);
+  font-size: 10px;
+  color: var(--dj-water-400);
+  margin-top: 2px;
+  word-break: break-all;
+}
+
+.theme-light .dj-task-file { color: var(--dj-water-600); }
+
+.dj-plan-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 11px 0 4px;
+  margin-top: 9px;
+  border-top: 1px solid var(--dj-border);
+}
+
+/* ==========================================================================
+   Verification findings
+   ========================================================================== */
+
+.dj-finding {
+  border-left: 3px solid var(--dj-border-strong);
+  border-radius: var(--dj-r-md);
+  background-color: var(--dj-surface);
+  padding: 8px 11px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.dj-finding-head { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+
+.dj-sev {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: var(--dj-r-pill);
+}
+
+.dj-finding.sev-critical { border-left-color: var(--dj-error); }
+.dj-finding.sev-critical .dj-sev { color: var(--dj-crit); background-color: var(--dj-error-wash); }
+.dj-finding.sev-major { border-left-color: var(--dj-pekoe); }
+.dj-finding.sev-major .dj-sev { color: var(--dj-accent-bright); background-color: var(--dj-accent-wash); }
+.dj-finding.sev-minor { border-left-color: var(--dj-straw); }
+.dj-finding.sev-minor .dj-sev { color: var(--dj-warn); background-color: var(--dj-warn-wash); }
+.dj-finding.sev-outdated { border-left-color: var(--dj-leaf-500); opacity: 0.72; }
+.dj-finding.sev-outdated .dj-sev { color: var(--dj-text-faint); background-color: var(--dj-surface-deep); }
+
+.dj-finding-where {
+  font-family: var(--dj-font-mono);
+  font-size: 10px;
+  color: var(--dj-water-400);
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dj-finding-body { color: var(--dj-text-muted); line-height: 1.5; }
+
+/* Plan input and layout utilities (OBS-13) */
+.dj-plan-input {
+  width: 100%;
+  max-width: 420px;
+}
+
+.dj-plan-actions-center {
+  justify-content: center;
+}
+
+.dj-plan-title-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dj-phase-intent {
+  margin-bottom: 6px;
+}
+
+button.dj-phase-head {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+/* In-panel progress card (PD-16, DM-26) */
+.dj-plan-progress-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  border-radius: var(--dj-r-lg);
+  background-color: var(--dj-spec-wash);
+  border: 1px solid var(--dj-accent-edge);
+}
+
+.dj-plan-progress-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--dj-accent-wash);
+  border-top-color: var(--dj-accent);
+  animation: dj-spin 0.8s linear infinite;
+  flex: 0 0 auto;
+}
+
+.dj-plan-progress-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dj-plan-progress-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dj-text);
+}
+
+.dj-plan-progress-meta {
+  font-size: 11px;
+  color: var(--dj-text-muted);
+  font-family: var(--dj-font-mono);
+  margin-top: 2px;
+}
+
+.dj-plan-progress-cancel {
+  flex: 0 0 auto;
+}
+
+.dj-btn.is-confirming {
+  background-color: var(--dj-crit);
+  color: var(--dj-text-on-accent);
+  border-color: transparent;
+}
+

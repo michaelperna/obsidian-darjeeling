@@ -1,0 +1,237 @@
+/* ==========================================================================
+   PROJECT DARJEELING — Design System Tokens & Semantic Architecture
+   --------------------------------------------------------------------------
+   Default mapping (.darjeeling-root):
+   Components read ONLY semantic --dj-* tokens, which map 1:1 to Obsidian
+   theme variables in both light and dark modes (ADR-20, DM-03).
+
+   Opt-in Tea Garden palette (.darjeeling-root.dj-palette-tea):
+   Overrides the semantic layer with the artisanal hillside elevation ramp
+   (soil, leaf, flush, oxidation, liquor) when explicitly activated.
+   ========================================================================== */
+
+.darjeeling-root {
+  /* ================= Default Semantic Layer (Obsidian-Native) ================= */
+
+  /* Surfaces & Backgrounds */
+  --dj-bg: var(--background-primary);
+  --dj-surface: var(--background-secondary);
+  --dj-surface-raised: var(--background-secondary-alt);
+  --dj-surface-sunken: var(--background-primary-alt);
+  --dj-surface-deep: var(--background-modifier-form-field);
+
+  /* Borders */
+  --dj-border: var(--background-modifier-border);
+  --dj-border-strong: var(--background-modifier-border-focus);
+  --dj-border-focus: var(--interactive-accent);
+
+  /* Text & Typography */
+  --dj-text: var(--text-normal);
+  --dj-text-muted: var(--text-muted);
+  --dj-text-faint: var(--text-faint);
+  --dj-text-on-accent: var(--text-on-accent, #ffffff);
+
+  /* Typography Scales (DM-41: 12px UI / 11px mono minimums) */
+  --dj-font-size-ui: max(12px, var(--font-ui-smaller, 13px));
+  --dj-font-size-mono: max(11px, var(--font-monospace-default, 12px));
+  --dj-font-ui: var(--font-interface, ui-sans-serif, system-ui, sans-serif);
+  --dj-font-mono: var(--font-monospace, ui-monospace, "SFMono-Regular", Menlo, monospace);
+  --dj-font-editorial: var(--font-editor, "Newsreader", "Playfair Display", Georgia, "Times New Roman", serif);
+  --dj-font-serif: var(--dj-font-editorial);
+
+  /* Interactive Accents */
+  --dj-accent: var(--interactive-accent);
+  --dj-accent-hover: var(--interactive-accent-hover);
+  --dj-accent-bright: var(--interactive-accent);
+  --dj-accent-wash: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+  --dj-accent-edge: color-mix(in srgb, var(--interactive-accent) 30%, transparent);
+
+  /* Status Colors (Default / Dark Mode: mapped to Obsidian variables) */
+  --dj-ok: var(--color-green, #4e7a52);
+  --dj-warn: var(--color-yellow, #c48a28);
+  --dj-crit: var(--color-red, #b83822);
+  --dj-success: var(--dj-ok);
+  --dj-error: var(--dj-crit);
+  --dj-info: var(--color-blue, var(--interactive-accent));
+  --dj-spec: var(--color-purple, #9b5c6b);
+
+  /* Status Washes & Meter Tracks */
+  --dj-ok-wash: color-mix(in srgb, var(--dj-ok) 12%, transparent);
+  --dj-warn-wash: color-mix(in srgb, var(--dj-warn) 12%, transparent);
+  --dj-crit-wash: color-mix(in srgb, var(--dj-crit) 12%, transparent);
+  --dj-ok-track: color-mix(in srgb, var(--dj-ok) 22%, transparent);
+  --dj-warn-track: color-mix(in srgb, var(--dj-warn) 22%, transparent);
+  --dj-crit-track: color-mix(in srgb, var(--dj-crit) 22%, transparent);
+  --dj-info-wash: color-mix(in srgb, var(--dj-info) 12%, transparent);
+  --dj-spec-wash: color-mix(in srgb, var(--dj-spec) 15%, transparent);
+  --dj-success-wash: var(--dj-ok-wash);
+  --dj-error-wash: var(--dj-crit-wash);
+
+  /* Status Aliases for Host / Monitoring Components (VTH-38) */
+  --dj-st-ok: var(--dj-ok);
+  --dj-st-warn: var(--dj-warn);
+  --dj-st-crit: var(--dj-crit);
+  --dj-st-ok-wash: var(--dj-ok-wash);
+  --dj-st-warn-wash: var(--dj-warn-wash);
+  --dj-st-crit-wash: var(--dj-crit-wash);
+  --dj-st-ok-track: var(--dj-ok-track);
+  --dj-st-warn-track: var(--dj-warn-track);
+  --dj-st-crit-track: var(--dj-crit-track);
+  --dj-tea-green: var(--dj-ok);
+
+  /* Focus Ring Token (DM-38) */
+  --dj-focus: var(--interactive-accent);
+  --dj-focus-ring: 2px solid var(--dj-focus);
+
+  /* Shapes & Radii */
+  --dj-r-sm: 4px;
+  --dj-r-md: 6px;
+  --dj-r-lg: 10px;
+  --dj-r-xl: 14px;
+  --dj-r-pill: 999px;
+
+  /* Shadows (reserved for genuinely floating surfaces) */
+  --dj-shadow-low: none;
+  --dj-shadow-mid: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --dj-shadow-high: 0 12px 36px rgba(0, 0, 0, 0.42);
+  --dj-ease: cubic-bezier(0.2, 0, 0, 1);
+  --dj-fast: 0.12s;
+  --dj-ridge-opacity: 0.4;
+
+  /* Porcelain Teacup Tokens (Bone China in Light and Dark) */
+  --dj-cup-porcelain-top: #ffffff;
+  --dj-cup-porcelain-bot: #f2ede4;
+  --dj-cup-border: #e0d8c8;
+  --dj-cup-saucer-base: rgba(255, 255, 255, 0.18);
+  --dj-cup-handle-inner: #faf8f5;
+  --dj-steam-color: rgba(255, 255, 255, 0.85);
+}
+
+/* ================= Light Theme Adjustments ================= */
+.theme-light .darjeeling-root {
+  --dj-text-on-accent: #ffffff;
+
+  /* Light-mode status colours: darkened with color-mix against black
+     to guarantee >= 3:1 contrast against light backgrounds (DM-11, DM-20) */
+  --dj-ok: color-mix(in srgb, var(--color-green, #3f6b45) 60%, #000000 40%);
+  --dj-warn: color-mix(in srgb, var(--color-yellow, #8a6a14) 55%, #000000 45%);
+  --dj-crit: color-mix(in srgb, var(--color-red, #a3351f) 70%, #000000 30%);
+  --dj-success: var(--dj-ok);
+  --dj-error: var(--dj-crit);
+
+  --dj-ridge-opacity: 0.26;
+  --dj-shadow-mid: 0 4px 16px rgba(60, 46, 24, 0.12);
+  --dj-shadow-high: 0 12px 36px rgba(60, 46, 24, 0.16);
+
+  /* Light mode teacup porcelain */
+  --dj-cup-porcelain-top: #ffffff;
+  --dj-cup-porcelain-bot: #ede8dc;
+  --dj-cup-border: #d5cfc0;
+  --dj-cup-saucer-base: rgba(0, 0, 0, 0.12);
+  --dj-cup-handle-inner: #ffffff;
+  --dj-steam-color: rgba(120, 90, 60, 0.45);
+}
+
+/* ================= Opt-in Tea Garden Palette (.dj-palette-tea) ================= */
+.darjeeling-root.dj-palette-tea {
+  /* ---- Soil: wet earth under the terraces ---- */
+  --dj-soil-900: #0b0e0b;
+  --dj-soil-850: #0f1310;
+  --dj-soil-800: #141915;
+
+  /* ---- Leaf: the mature bush ---- */
+  --dj-leaf-900: #151e17;
+  --dj-leaf-800: #1a261c;
+  --dj-leaf-700: #213024;
+  --dj-leaf-600: #2b3f2e;
+  --dj-leaf-500: #3a5340;
+
+  /* ---- Flush: two leaves and a bud ---- */
+  --dj-flush-500: #4e7a52;
+  --dj-flush-400: #6b9c6b;
+  --dj-flush-300: #93be8a;
+  --dj-flush-200: #bbd9ae;
+
+  /* ---- Oxidation: the leaf turning ---- */
+  --dj-ox-900: #12140f;
+  --dj-ox-800: #1a1a13;
+  --dj-ox-700: #241f16;
+  --dj-ox-600: #31281a;
+  --dj-ox-500: #40321f;
+
+  /* ---- Liquor: what ends up in the cup ---- */
+  --dj-cream: #f4e9d2;
+  --dj-straw: #e6ce92;
+  --dj-honey: #d9a85c;
+  --dj-pekoe: #c4661f;
+  --dj-pekoe-bright: #e0822e;
+  --dj-pekoe-glow: #f2a85c;
+  --dj-amber: #a65e28;
+  --dj-brew: #6b3e1d;
+  --dj-steep: #432512;
+  --dj-black: #2a1a10;
+
+  /* ---- Mist & silver ---- */
+  --dj-silver: #d8dccf;
+  --dj-mist-400: #8a9887;
+  --dj-mist-300: #a4b09e;
+  --dj-mist-200: #c6cebe;
+  --dj-mist-100: #e4e9dc;
+  --dj-mist-050: #f5f8f0;
+
+  /* ---- Muscatel & steeping water ---- */
+  --dj-muscatel-600: #7d4654;
+  --dj-muscatel-500: #9b5c6b;
+  --dj-muscatel-400: #c07e8c;
+  --dj-water-600: #37655a;
+  --dj-water-500: #528577;
+  --dj-water-400: #7fb0a0;
+  --dj-water-300: #a3cdbe;
+
+  /* Overrides for Tea Garden mode */
+  --dj-bg: var(--dj-soil-900);
+  --dj-surface: var(--dj-leaf-900);
+  --dj-surface-raised: var(--dj-leaf-800);
+  --dj-surface-sunken: var(--dj-ox-800);
+  --dj-surface-deep: var(--dj-ox-900);
+  --dj-border: var(--dj-leaf-700);
+  --dj-border-strong: var(--dj-leaf-600);
+
+  --dj-text: var(--dj-mist-100);
+  --dj-text-muted: var(--dj-mist-300);
+  --dj-text-faint: var(--dj-mist-400);
+
+  --dj-accent: var(--dj-pekoe);
+  --dj-accent-hover: var(--dj-pekoe-bright);
+  --dj-accent-bright: var(--dj-pekoe-glow);
+  --dj-accent-wash: rgba(224, 130, 46, 0.11);
+  --dj-accent-edge: rgba(224, 130, 46, 0.32);
+
+  --dj-ok: #46a86f;
+  --dj-warn: #d4a72c;
+  --dj-crit: #c2452f;
+}
+
+.theme-light .darjeeling-root.dj-palette-tea {
+  --dj-bg: #f7f3e8;
+  --dj-surface: #efe8d8;
+  --dj-surface-raised: #fbf8f0;
+  --dj-surface-sunken: #e2d9c4;
+  --dj-surface-deep: #d8cdb4;
+  --dj-border: #d0c4aa;
+  --dj-border-strong: #b6a688;
+
+  --dj-text: #1b2118;
+  --dj-text-muted: #4d5a48;
+  --dj-text-faint: #7d8874;
+
+  --dj-accent: #a8541a;
+  --dj-accent-hover: #c4661f;
+  --dj-accent-bright: #8a4415;
+  --dj-accent-wash: rgba(168, 84, 26, 0.09);
+  --dj-accent-edge: rgba(168, 84, 26, 0.28);
+
+  --dj-ok: #0f7a52;
+  --dj-warn: #a07a12;
+  --dj-crit: #a82f1c;
+}

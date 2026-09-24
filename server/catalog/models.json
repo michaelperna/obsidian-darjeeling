@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": 1,
+  "claude_code": {
+    "tested_versions": ">=0.2.0,<1.0.0",
+    "models": [
+      { "id": "claude-3-7-sonnet-20250219", "name": "Claude 3.7 Sonnet", "default": true },
+      { "id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet" },
+      { "id": "claude-3-5-haiku-20241022", "name": "Claude 3.5 Haiku" },
+      { "id": "claude-3-opus-20240229", "name": "Claude 3 Opus" }
+    ]
+  },
+  "deepseek": {
+    "models": [
+      { "id": "deepseek-chat", "name": "DeepSeek V3", "default": true },
+      { "id": "deepseek-reasoner", "name": "DeepSeek R1" }
+    ]
+  }
+}

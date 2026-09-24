@@ -1,0 +1,86 @@
+/* ==========================================================================
+   Vault synchronization & note status UI (G-11, G-49, F-10)
+   - Changed-files indicator chips
+   - Vault note conflict warning banners
+   - Host pull and sync reconciliation cards
+   ========================================================================== */
+
+.darjeeling-root .dj-vault-changed-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--dj-r-pill);
+  font-size: var(--dj-font-size-mono);
+  font-family: var(--dj-font-ui);
+  background: var(--dj-accent-wash);
+  color: var(--dj-accent);
+  border: 1px solid var(--dj-accent-edge);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--dj-fast) var(--dj-ease), border-color var(--dj-fast) var(--dj-ease);
+}
+
+.darjeeling-root .dj-vault-changed-chip:hover {
+  background: var(--dj-accent-hover);
+  color: var(--dj-text-on-accent);
+}
+
+.darjeeling-root .dj-vault-conflict-card {
+  margin: 8px 0;
+  padding: 12px;
+  border-radius: var(--dj-r-md);
+  background: var(--dj-error-wash);
+  border: 1px solid var(--dj-error);
+  color: var(--dj-text);
+  font-size: var(--dj-font-size-ui);
+}
+
+.darjeeling-root .dj-vault-conflict-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: var(--dj-error);
+  margin-bottom: 4px;
+}
+
+.darjeeling-root .dj-vault-conflict-desc {
+  margin-bottom: 8px;
+  color: var(--dj-text-muted);
+}
+
+.darjeeling-root .dj-vault-conflict-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.darjeeling-root .dj-vault-pull-card {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: var(--dj-r-md);
+  background: var(--dj-surface-sunken);
+  border: 1px solid var(--dj-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.darjeeling-root .dj-vault-pull-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.darjeeling-root .dj-vault-pull-path {
+  font-family: var(--dj-font-mono);
+  font-size: var(--dj-font-size-mono);
+  color: var(--dj-text);
+}
+
+.darjeeling-root .dj-vault-pull-meta {
+  font-size: var(--dj-font-size-mono);
+  color: var(--dj-text-muted);
+}

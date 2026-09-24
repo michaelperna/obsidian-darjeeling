@@ -1,0 +1,70 @@
+{
+  "meshnetHost": "100.64.0.10",
+  "port": 8765,
+  "authToken": "test-token-not-real",
+  "hasCompletedOnboarding": false,
+  "runtimeMode": "local",
+  "askHostOnNewSession": true,
+  "remoteHosts": [
+    {
+      "id": "primary",
+      "name": "Primary Host",
+      "host": "100.64.0.10",
+      "port": 8765,
+      "authToken": "test-token-not-real",
+      "remoteCwd": "/home/darjeeling/vault"
+    }
+  ],
+  "activeRemoteHostId": "primary",
+  "directApiProvider": "deepseek",
+  "geminiApiKey": "",
+  "anthropicApiKey": "",
+  "ollamaBaseUrl": "http://localhost:11434",
+  "ollamaModel": "llama3.2",
+  "openaiApiKey": "sk-test-not-real",
+  "openaiBaseUrl": "https://api.deepseek.com",
+  "openaiModel": "deepseek-chat",
+  "agent": "agy",
+  "model": "gemini-3.8-flash-high",
+  "fallbackModel": "",
+  "effort": "high",
+  "permissionMode": "acceptAll",
+  "remoteCwd": "/home/darjeeling/vault",
+  "appendSystemPrompt": "",
+  "partialMessages": false,
+  "defaultMode": "chat",
+  "sessionName": "darjeeling",
+  "attachActiveNote": true,
+  "autoPullArtifacts": true,
+  "artifactFolder": "Darjeeling/Artifacts",
+  "fontSize": 14,
+  "fontFamily": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+  "cursorBlink": true,
+  "terminalProfiles": [
+    { "id": "local-shell", "name": "Local Shell", "type": "local", "executable": "", "args": [] },
+    { "id": "custom-script", "name": "Custom script", "type": "local", "executable": "scripts/example.sh", "args": [] },
+    { "id": "interactive-agy", "name": "Interactive AGY", "type": "local", "executable": "agy", "args": ["-i"] },
+    { "id": "remote-tmux", "name": "Remote Host (tmux)", "type": "remote", "sessionName": "darjeeling" }
+  ],
+  "activeTerminalProfileId": "remote-tmux",
+  "lastAgentSessionId": "00000000-0000-4000-8000-000000000001",
+  "harnessModels": {
+    "agy": "gemini-3.8-flash-high",
+    "claude": "claude-opus-5",
+    "deepseek": "deepseek-chat",
+    "gemini": "gemini-2.5-flash",
+    "anthropic": "claude-3-7-sonnet-20250219",
+    "ollama": "llama3.2",
+    "openai-compatible": "deepseek-v4-pro"
+  },
+  "modelProbes": [
+    { "requested": "opus", "resolved": "claude-opus-5", "ok": true, "substituted": false },
+    { "requested": "sonnet", "resolved": "claude-sonnet-5", "ok": true, "substituted": false },
+    { "requested": "haiku", "resolved": "claude-haiku-4-5-20251001", "ok": true, "substituted": false },
+    { "requested": "claude-opus-5", "resolved": "claude-opus-5", "ok": true, "substituted": false },
+    { "requested": "claude-sonnet-5", "resolved": "claude-sonnet-5", "ok": true, "substituted": false },
+    { "requested": "claude-fable-5-1", "resolved": "claude-sonnet-5", "ok": true, "substituted": true },
+    { "requested": "claude-haiku-4-5-20251001", "resolved": "claude-haiku-4-5-20251001", "ok": true, "substituted": false }
+  ],
+  "previousAgentSessionId": "00000000-0000-4000-8000-000000000002"
+}

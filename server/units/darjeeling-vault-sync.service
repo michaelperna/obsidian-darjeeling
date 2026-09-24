@@ -1,0 +1,17 @@
+[Unit]
+Description=Darjeeling Vault Sync (Obsidian Headless Sync)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=darjeeling-sync
+Group=darjeeling
+UMask=002
+Environment=HOME=/var/lib/darjeeling-sync
+ExecStart=/usr/bin/env ob sync --continuous --no-config
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

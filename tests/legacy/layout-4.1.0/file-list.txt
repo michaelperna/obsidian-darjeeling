@@ -1,0 +1,16 @@
+/home/darjeeling/.bun: 0755 darjeeling:darjeeling
+/home/darjeeling/.bun/bin/bun: 0755 darjeeling:darjeeling
+/home/darjeeling/.bun/bin/bunx: lrwxrwxrwx darjeeling:darjeeling -> /home/darjeeling/.bun/bin/bun
+/home/darjeeling/.npm-global: 0755 darjeeling:darjeeling
+/home/darjeeling/.npm-global/bin/claude: lrwxrwxrwx darjeeling:darjeeling -> ../lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe
+/home/darjeeling/.tmux.conf: 0644 darjeeling:darjeeling
+/home/darjeeling/darjeeling-server: 0755 darjeeling:darjeeling
+/home/darjeeling/darjeeling-server/config.env: 0600 darjeeling:darjeeling
+/home/darjeeling/darjeeling-server/requirements.txt: 0644 darjeeling:darjeeling
+/home/darjeeling/darjeeling-server/.token: 0600 darjeeling:darjeeling
+/home/darjeeling/darjeeling-server/server.py: 0644 darjeeling:darjeeling
+/home/darjeeling/darjeeling-server/venv: 0755 darjeeling:darjeeling
+/home/darjeeling/vault: 0755 darjeeling:darjeeling
+/usr/local/bin/bun: lrwxrwxrwx root:root -> /home/darjeeling/.bun/bin/bun
+/usr/local/bin/claude: lrwxrwxrwx root:root -> /home/darjeeling/.npm-global/bin/claude
+/etc/systemd/system/darjeeling.service: 0644 root:root

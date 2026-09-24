@@ -1,0 +1,20 @@
+[Unit]
+Description=Darjeeling server
+Wants=network-online.target darjeeling-tmux.service
+After=network-online.target darjeeling-tmux.service tailscaled.service nordvpnd.service
+
+[Service]
+User=darjeeling
+WorkingDirectory=/opt/darjeeling/current
+EnvironmentFile=/etc/darjeeling/darjeeling.env
+Environment=HOME=/var/lib/darjeeling TMUX_TMPDIR=/var/lib/darjeeling/run
+Environment=PYTHONPATH=/opt/darjeeling/current
+Environment=PATH=/var/lib/darjeeling/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/darjeeling/current/venv/bin/python -m darjeeling_server
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

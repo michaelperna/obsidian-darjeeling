@@ -1,0 +1,12 @@
+# Fallback copy of the lab host's ~/dj-lab/images/Containerfile.debian, used
+# when that file is absent. A "fresh server": systemd as PID 1, sudo, curl, and
+# a non-root sudo user `tester`. Nothing Darjeeling needs is preinstalled on
+# purpose (no git, no python, no node) -- that is the installer's job.
+# BASE must be fully qualified (rootless podman has no short-name registry).
+ARG BASE=docker.io/library/debian:13
+FROM ${BASE}
+ENV container=podman
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends systemd systemd-sysv sudo ca-certificates curl iproute2 procps && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN useradd -m -s /bin/bash tester && echo "tester ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/tester
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]

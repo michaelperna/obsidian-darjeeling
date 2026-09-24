@@ -1,0 +1,4 @@
+// Process dies mid-turn with no result event.
+{"type":"system","subtype":"init","cwd":"{{cwd}}","session_id":"{{session_id}}","tools":["Task","Bash","Glob","Grep","Read","Edit","Write","WebFetch","TodoWrite","WebSearch"],"mcp_servers":[],"model":"{{model}}","permissionMode":"{{permission_mode}}","slash_commands":["compact","context","cost","review"],"apiKeySource":"none","claude_code_version":"2.1.999","output_style":"default","agents":["general-purpose"],"skills":[],"plugins":[],"uuid":"{{uuid}}"}
+{"$fake":"stderr","text":"FATAL: simulated crash"}
+{"$fake":"exit","code":137}
