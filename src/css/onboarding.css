@@ -258,3 +258,69 @@
   height: 36px;
   color: var(--dj-accent, #c4661f);
 }
+
+.dj-pair-code-display-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.dj-code-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px;
+  background: var(--background-primary);
+  border-radius: var(--dj-r-md, 6px);
+  border: 1px solid var(--dj-border, rgba(255, 255, 255, 0.08));
+  width: 100%;
+}
+
+.dj-code-label,
+.dj-url-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dj-code-value {
+  font-family: var(--font-monospace);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--text-accent, var(--dj-accent));
+}
+
+.dj-url-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  background: var(--background-primary);
+  border-radius: var(--dj-r-md, 6px);
+  border: 1px solid var(--dj-border, rgba(255, 255, 255, 0.08));
+  width: 100%;
+}
+
+.dj-url-card code {
+  word-break: break-all;
+  font-size: 12px;
+}
+
+.dj-phone-steps {
+  text-align: left;
+  font-size: 13px;
+  color: var(--text-muted);
+  padding-left: 20px;
+  margin: 8px 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+

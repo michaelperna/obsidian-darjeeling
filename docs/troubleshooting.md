@@ -117,3 +117,16 @@ sudo npm update -g @anthropic-ai/claude-code
    - Go to iOS **Settings > Obsidian**.
    - Ensure **Local Network** is toggled **ON**.
 3. **Conflicting VPNs**: iOS only permits one active VPN at a time. If an external VPN profile disconnected Tailscale or Meshnet, re-enable the mesh VPN in iOS Settings.
+
+---
+
+## 7. Mobile Camera Access & Pairing
+**Symptoms:** Mobile Obsidian cannot scan QR codes or open the camera.
+
+### Resolution:
+Obsidian Mobile (iOS and Android) operates inside a secure WebView sandbox without camera entitlements (`NSCameraUsageDescription`), so plugins cannot access camera hardware in-app.
+Instead, use the universal 8-digit pairing code:
+1. Run `darjeeling pair` on your companion server terminal (or click **Generate pairing code** in desktop Darjeeling settings).
+2. On your phone or tablet, open Command Palette and select **Darjeeling: Pair with server** (or navigate to **Settings > Darjeeling > Connections**).
+3. Enter your Server URL and the 8-digit pairing code, then tap **Pair Device**.
+
