@@ -67,7 +67,7 @@ To comply with Obsidian plugin directory security rules (`OBS-06`, `DM-30`), all
 - Every SVG factory generates unique IDs per instance via `nextId(prefix)` (e.g., `dj-bowl-rim-1`, `dj-bowl-rim-2`).
 
 ### C. Deprecated Asset Purge
-- All legacy base64 raster PNGs (`data:image/png;base64`) and hardcoded gradient IDs (`djLeafGrad`) have been purged from `src/`.
+- All legacy base64 raster PNGs (`data:image/png;base64`) have been purged from `src/`.
 - Porcelain bone-china colors are governed by semantic tokens: `--dj-cup-porcelain-top`, `--dj-cup-porcelain-bot`, `--dj-cup-border`, `--dj-cup-tea-fill`.
 
 ---
@@ -119,7 +119,7 @@ The CSS suite is verified in CI using `npm run lint:css` (`scripts/ci/css-lint.m
 3. **0 undefined `--dj-*` custom properties** across all stylesheet files (`VTH-38`).
 4. **0 missing `@keyframes`** for any referenced CSS animation (`DM-19`).
 5. **0 raw un-tokenized hex literals** outside `tokens.css` (`DM-03`).
-6. **0 legacy assets** (`djLeafGrad` or `data:image/png;base64`) across `src/` (`OBS-05`, `OBS-06`).
+6. **0 legacy assets** (`data:image/png;base64`) across `src/` (`OBS-05`, `OBS-06`).
 7. Balanced syntax and valid brace trees in the compiled `styles.css`.
 
 ### Running Verification Locally
