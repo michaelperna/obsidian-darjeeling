@@ -127,14 +127,14 @@ def cmd_version(_args: argparse.Namespace) -> int:
     if v_file.exists():
         print(v_file.read_text().strip())
     else:
-        print("1.0.2")
+        print("1.0.3")
     return 0
 
 
 def cmd_status(_args: argparse.Namespace) -> int:
     print("=== Project Darjeeling Status ===")
     v_file = CURRENT_DIR / "VERSION"
-    version = v_file.read_text().strip() if v_file.exists() else "1.0.2"
+    version = v_file.read_text().strip() if v_file.exists() else "1.0.3"
     print(f"Version: {version}")
 
     # Check services via systemctl
