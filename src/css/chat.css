@@ -662,6 +662,12 @@
   border: 1px solid rgba(195, 140, 60, 0.3);
 }
 
+.dj-conv-badge.is-local {
+  background-color: var(--background-modifier-hover, rgba(255, 255, 255, 0.08));
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border, rgba(255, 255, 255, 0.15));
+}
+
 .dj-save-note-btn {
   background: none;
   border: none;

@@ -620,6 +620,17 @@ body .vertical-tab-content.darjeeling-root {
   box-sizing: border-box;
 }
 
+.is-mobile .dj-settings-modal-body,
+.is-mobile .dj-settings-tab,
+.is-mobile body .vertical-tab-content.darjeeling-root {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain !important;
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 90px) !important;
+}
+
 .dj-settings-modal-body *,
 .dj-settings-tab *,
 body .vertical-tab-content.darjeeling-root * {

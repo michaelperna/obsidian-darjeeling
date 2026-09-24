@@ -354,8 +354,6 @@ export class TurnDispatcher {
             return;
           }
         }
-      } else if (client.connectionState !== "open") {
-        client.connect();
       }
 
       if (this.abortPreparation) {
@@ -521,8 +519,10 @@ export class TurnDispatcher {
       this.chat.setModeOverride(null);
       if (sent) {
         this.chat.setBusy(true);
+        this.chat.armTurnWatchdog(90000);
       } else {
         this.chat.setBusy(false);
+        this.chat.clearTurnWatchdog();
         const offlineChecker = client as { isOffline?: () => boolean };
         const isOffline = typeof offlineChecker.isOffline === "function" ? offlineChecker.isOffline() : false;
         if (mode === "remote" && (client.connectionState !== "open" || isOffline)) {
@@ -532,6 +532,7 @@ export class TurnDispatcher {
     } catch (err) {
       this.isPreparing = false;
       this.chat.setBusy(false);
+      this.chat.clearTurnWatchdog();
       this.chat.setModeOverride(null);
       console.error("[Darjeeling] Turn execution error:", err);
       this.chat.errorNote(err instanceof Error ? err.message : String(err));

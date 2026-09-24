@@ -10,7 +10,7 @@ import {
   sanitizeModelForHarness,
 } from "../../models/registry";
 import { detectLocalBinary } from "../../runtime/localAgentRunner";
-import { setDeviceRuntime } from "../../runtime/router";
+import { resolveDeviceRuntime, setDeviceRuntime } from "../../runtime/router";
 import { getTeaLeafBranchSvg } from "../illustrations";
 import { verifyHostAuthentication } from "../../net/pairing";
 import { openDarjeelingSettings } from "../../settings/openSettings";
@@ -70,17 +70,7 @@ export class DarjeelingNewSessionModal extends Modal {
     const settings = this.plugin.settings;
 
     // Detect initial mode safely
-    if (Platform.isDesktop) {
-      this.selectedMode = settings.runtimeMode;
-    } else {
-      // Mobile: never default to local
-      this.selectedMode =
-        settings.runtimeMode === "local"
-          ? settings.meshnetHost
-            ? "remote"
-            : "direct-api"
-          : settings.runtimeMode;
-    }
+    this.selectedMode = resolveDeviceRuntime(settings, this.app);
 
     this.askHostOnNewSession = settings.askHostOnNewSession ?? true;
 
@@ -387,9 +377,15 @@ export class DarjeelingNewSessionModal extends Modal {
     const targetUrlHttps = `https://${this.remoteHost}:${this.remotePort}`;
 
     const hosts = this.plugin.settings.hosts ?? [];
-    const matchedHost = hosts.find(
-      (h) => h.baseUrl === targetUrl || h.baseUrl === targetUrlHttps
-    );
+    let matchedHost = this.plugin.settings.activeHostId
+      ? hosts.find((h) => h.id === this.plugin.settings.activeHostId)
+      : undefined;
+
+    if (!matchedHost || (matchedHost.baseUrl !== targetUrl && matchedHost.baseUrl !== targetUrlHttps)) {
+      matchedHost = hosts.find(
+        (h) => h.baseUrl === targetUrl || h.baseUrl === targetUrlHttps
+      );
+    }
 
     if (matchedHost?.tokenSecretId) {
       try {
@@ -400,16 +396,8 @@ export class DarjeelingNewSessionModal extends Modal {
       }
     }
 
-    if (this.plugin.settings.activeHostId) {
-      const active = hosts.find((h) => h.id === this.plugin.settings.activeHostId);
-      if (active?.tokenSecretId) {
-        try {
-          const sec = await this.plugin.secretStorage.getSecret(active.tokenSecretId);
-          if (sec) return sec;
-        } catch {
-          /* ignore */
-        }
-      }
+    if (matchedHost?.authToken) {
+      return matchedHost.authToken;
     }
 
     const remoteHosts = this.plugin.settings.remoteHosts ?? [];

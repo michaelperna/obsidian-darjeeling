@@ -422,13 +422,22 @@ export class DarjeelingView extends ItemView {
         void (async () => {
           this.setMode("chat");
           this.chat?.showSessionStarting(target);
-          await this.applyHostSelection(target);
-          if (target.mode === "remote" && this.agent.connectionState !== "open") {
-            this.chat?.showRemoteOfflineCard("New Session");
-          } else {
-            this.chat?.newConversation();
+          try {
+            await this.applyHostSelection(target);
+          } catch (err) {
+            console.error("[Darjeeling] Error applying host selection:", err);
+          } finally {
+            if (
+              target.mode === "remote" &&
+              this.agent.connectionState !== "open" &&
+              this.agent.connectionState !== "connecting"
+            ) {
+              this.chat?.showRemoteOfflineCard("New Session");
+            } else {
+              this.chat?.newConversation();
+            }
+            this.chat?.focus();
           }
-          this.chat?.focus();
         })();
       }).open();
     } else {

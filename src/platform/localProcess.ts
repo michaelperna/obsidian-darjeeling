@@ -223,32 +223,45 @@ export class LocalTerminalProcess {
     // Set initial window size
     this.resize(cols, rows);
 
-    this.proc.stdout?.on("data", (chunk: { toString(): string }) => {
-      const text = chunk.toString();
+    this.proc.stdout?.on("data", (chunk: unknown) => {
+      const text =
+        typeof chunk === "string"
+          ? chunk
+          : chunk && typeof (chunk as { toString?: () => string }).toString === "function"
+          ? (chunk as { toString: () => string }).toString()
+          : "";
       for (const listener of this.dataListeners) {
         listener(text);
       }
     });
 
-    this.proc.stderr?.on("data", (chunk: { toString(): string }) => {
-      const text = chunk.toString();
+    this.proc.stderr?.on("data", (chunk: unknown) => {
+      const text =
+        typeof chunk === "string"
+          ? chunk
+          : chunk && typeof (chunk as { toString?: () => string }).toString === "function"
+          ? (chunk as { toString: () => string }).toString()
+          : "";
       for (const listener of this.dataListeners) {
         listener(text);
       }
     });
 
-    this.proc.on("error", (err: Error) => {
-      const msg = `\r\n\x1b[31m[Process Error: ${err.message}]\x1b[0m\r\n`;
+    this.proc.on("error", (err: unknown) => {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const msg = `\r\n\x1b[31m[Process Error: ${errMsg}]\x1b[0m\r\n`;
       for (const listener of this.dataListeners) {
         listener(msg);
       }
     });
 
-    this.proc.on("exit", (code: number | null, signal: string | null) => {
+    this.proc.on("exit", (code: unknown, signal: unknown) => {
       this._isRunning = false;
-      const exitCode = code ?? (signal ? 1 : 0);
+      const numCode = typeof code === "number" ? code : null;
+      const sigStr = typeof signal === "string" ? signal : null;
+      const exitCode = numCode ?? (sigStr ? 1 : 0);
       for (const listener of this.exitListeners) {
-        listener(exitCode, signal ?? undefined);
+        listener(exitCode, sigStr ?? undefined);
       }
     });
   }

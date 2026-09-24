@@ -10,12 +10,12 @@ export interface ChildProcessLike {
   pid?: number;
   killed?: boolean;
   stdout?: {
-    on(event: string, listener: (...args: any[]) => void): unknown;
+    on(event: string, listener: (...args: unknown[]) => void): unknown;
     pipe?(dest: unknown): unknown;
     setEncoding(encoding: string): unknown;
   } | null;
   stderr?: {
-    on(event: string, listener: (...args: any[]) => void): unknown;
+    on(event: string, listener: (...args: unknown[]) => void): unknown;
     setEncoding(encoding: string): unknown;
   } | null;
   stdin?: {
@@ -25,8 +25,8 @@ export interface ChildProcessLike {
   } | null;
   stdio?: unknown[];
   kill(signal?: string | number): boolean;
-  on(event: string, listener: (...args: any[]) => void): unknown;
-  once(event: string, listener: (...args: any[]) => void): unknown;
+  on(event: string, listener: (...args: unknown[]) => void): unknown;
+  once(event: string, listener: (...args: unknown[]) => void): unknown;
 }
 
 export interface NodeChildProcessModule {
@@ -68,11 +68,42 @@ function getRequire(): ((id: string) => unknown) | null {
 }
 
 export function getNodeProcess(): NodeProcess | undefined {
+  if (!Platform.isDesktopApp && !Platform.isDesktop) return undefined;
+  const req = getRequire();
+  if (req) {
+    try {
+      const p = req("process") as NodeProcess;
+      if (p && p.env) return p;
+    } catch {
+      /* ignore */
+    }
+  }
+  if (typeof process !== "undefined" && process?.env) {
+    return process;
+  }
   if (typeof window !== "undefined") {
     const win = window as unknown as { process?: NodeProcess };
-    if (typeof win.process !== "undefined") return win.process;
+    if (typeof win.process !== "undefined" && win.process?.env) return win.process;
   }
   return undefined;
+}
+
+export function getUserHome(): string {
+  if (!Platform.isDesktopApp && !Platform.isDesktop) return "";
+  const req = getRequire();
+  if (req) {
+    try {
+      const os = req("os") as { homedir?(): string };
+      if (typeof os?.homedir === "function") {
+        const h = os.homedir();
+        if (h) return h;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  const proc = getNodeProcess();
+  return proc?.env?.HOME || proc?.env?.USERPROFILE || "";
 }
 
 export function getNodeChildProcess(): NodeChildProcessModule | null {
@@ -141,21 +172,29 @@ export function isLocalRuntimeSupported(): { supported: boolean; reason?: string
  * Returns common developer directories to prepend/append to PATH.
  */
 export function getStaticDevDirs(): string[] {
-  const home = getNodeProcess()?.env?.HOME || "";
-  return [
+  const home = getUserHome();
+  const dirs = [
     "/opt/homebrew/bin",
     "/opt/homebrew/sbin",
     "/usr/local/bin",
     "/usr/local/sbin",
-    `${home}/.local/bin`,
-    `${home}/.bun/bin`,
-    `${home}/.cargo/bin`,
-    `${home}/go/bin`,
+  ];
+  if (home) {
+    dirs.push(
+      `${home}/.local/bin`,
+      `${home}/.bun/bin`,
+      `${home}/.cargo/bin`,
+      `${home}/go/bin`,
+      `${home}/.gemini/antigravity-cli/bin`
+    );
+  }
+  dirs.push(
     "/usr/bin",
     "/bin",
     "/usr/sbin",
-    "/sbin",
-  ].filter(Boolean);
+    "/sbin"
+  );
+  return dirs.filter(Boolean);
 }
 
 /**
@@ -298,7 +337,7 @@ export async function checkPython3Available(): Promise<{ ok: boolean; path?: str
  * Safely checks if a file is executable.
  */
 export function isExecutable(filePath: string): boolean {
-  if (!Platform.isDesktopApp) return false;
+  if (!Platform.isDesktopApp && !Platform.isDesktop) return false;
   try {
     const fs = getNodeFs();
     if (!fs) return false;
@@ -314,7 +353,7 @@ export function isExecutable(filePath: string): boolean {
  * Resolves a default executable shell on Desktop.
  */
 export function resolveShell(preferredShell?: string): string {
-  if (!Platform.isDesktopApp) return "sh";
+  if (!Platform.isDesktopApp && !Platform.isDesktop) return "sh";
   if (preferredShell && isExecutable(preferredShell)) return preferredShell;
   if (isExecutable("/bin/zsh")) return "/bin/zsh";
   if (isExecutable("/bin/bash")) return "/bin/bash";
@@ -323,11 +362,4 @@ export function resolveShell(preferredShell?: string): string {
   return Platform.isWin ? "powershell.exe" : "sh";
 }
 
-/**
- * Gets user home directory on Desktop.
- */
-export function getUserHome(): string {
-  if (!Platform.isDesktopApp) return "";
-  return getNodeProcess()?.env?.HOME || "";
-}
 

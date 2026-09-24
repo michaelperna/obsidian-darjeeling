@@ -10,16 +10,25 @@ export function updateRuntimeChip(view: DarjeelingView, chipEl: HTMLElement | nu
   const settings = view.plugin.settings;
 
   const connState = view.agent.connectionState;
-  const isError = connState === "unauthorized" || (mode === "remote" && connState === "closed");
+  const isError = mode === "remote" && (connState === "unauthorized" || connState === "closed");
   chipEl.classList.toggle("dj-chip-error", isError);
 
   const iconSpan = chipEl.createSpan({ cls: "dj-chip-icon" });
   let label = "Local";
-  if (connState === "unauthorized") {
-    setIcon(iconSpan, "lock");
-    label = "Token rejected";
-  } else if (mode === "remote") {
-    if (connState === "connecting") {
+  if (mode === "local") {
+    setIcon(iconSpan, "laptop");
+    label = `Local (${settings.agent || "agy"})`;
+  } else if (mode === "direct-api") {
+    setIcon(iconSpan, "sparkles");
+    label = `API: ${
+      settings.directApiProvider === "openai-compatible" ? "DeepSeek" : settings.directApiProvider
+    }`;
+  } else {
+    // Remote mode
+    if (connState === "unauthorized") {
+      setIcon(iconSpan, "lock");
+      label = "Token rejected";
+    } else if (connState === "connecting") {
       setIcon(iconSpan, "loader");
       label = "Connecting...";
     } else if (connState === "closed") {
@@ -29,14 +38,6 @@ export function updateRuntimeChip(view: DarjeelingView, chipEl: HTMLElement | nu
       setIcon(iconSpan, "server");
       label = settings.meshnetHost ? `Remote: ${settings.meshnetHost}` : "Remote Host";
     }
-  } else if (mode === "direct-api") {
-    setIcon(iconSpan, "sparkles");
-    label = `API: ${
-      settings.directApiProvider === "openai-compatible" ? "DeepSeek" : settings.directApiProvider
-    }`;
-  } else {
-    setIcon(iconSpan, "laptop");
-    label = `Local (${settings.agent || "claude"})`;
   }
 
   chipEl.createSpan({ cls: "dj-chip-text", text: label });

@@ -159,7 +159,7 @@
   }
 
   .dj-composer-island {
-    margin: 4px 6px 6px 6px;
+    margin: 4px 6px calc(max(var(--mobile-navbar-height, 0px), var(--mobile-toolbar-height, 0px), 48px) + 6px) 6px;
     padding: 6px 8px;
     padding-bottom: calc(6px + var(--view-bottom-spacing, 0px) + env(safe-area-inset-bottom, 0px));
     border-radius: var(--dj-r-xl, 12px);
@@ -215,6 +215,7 @@
   .dj-host {
     padding-left: 8px;
     padding-right: 8px;
+    padding-bottom: calc(16px + max(var(--mobile-navbar-height, 0px), var(--mobile-toolbar-height, 0px), 48px));
   }
   .dj-header-btn {
     width: 30px;
@@ -242,6 +243,14 @@
 .darjeeling-root .dj-composer-island:focus-within {
   margin-bottom: 2px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.is-mobile .dj-composer-island {
+  margin-bottom: calc(max(var(--mobile-navbar-height, 0px), var(--mobile-toolbar-height, 0px), 48px) + 6px) !important;
+}
+
+.is-mobile .darjeeling-root .dj-composer-island:focus-within {
+  margin-bottom: calc(max(var(--mobile-navbar-height, 0px), var(--mobile-toolbar-height, 0px), 48px) + 2px) !important;
 }
 
 /* ================= Global Baseline: Touch Ergonomics (DM-06) ================= */

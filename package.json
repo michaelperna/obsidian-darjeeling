@@ -1,6 +1,6 @@
 {
   "name": "darjeeling",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Run Claude Code and other AI agents on your own Linux server and pick up the same sessions on desktop or phone. Includes chat, phase-gated plans saved as notes, a remote terminal, and direct chat with AI providers.",
   "main": "main.js",
   "scripts": {

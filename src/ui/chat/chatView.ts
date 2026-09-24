@@ -62,6 +62,7 @@ export class DarjeelingChat extends Component {
   private lastProcessedSeq: number = -1;
   private conversationEpoch: number = 0;
   private activeEpoch: number = 0;
+  private turnWatchdogTimer: number | null = null;
 
   constructor(
     plugin: DarjeelingPlugin,
@@ -274,11 +275,33 @@ export class DarjeelingChat extends Component {
     return this.plugin.settings.lastAgentSessionId || null;
   }
 
+  public armTurnWatchdog(timeoutMs = 90000): void {
+    this.clearTurnWatchdog();
+    this.turnWatchdogTimer = window.setTimeout(() => {
+      if (this.isBusy()) {
+        console.warn("[Darjeeling] Turn watchdog timeout: 90s elapsed without response.");
+        this.setBusy(false);
+        this.errorNote("Execution timed out after 90 seconds with no response from the agent.");
+        this.finishTurn();
+        this.client.interrupt();
+      }
+    }, timeoutMs);
+  }
+
+  public clearTurnWatchdog(): void {
+    if (this.turnWatchdogTimer !== null) {
+      window.clearTimeout(this.turnWatchdogTimer);
+      this.turnWatchdogTimer = null;
+    }
+  }
+
   newConversation(): void {
+    this.clearTurnWatchdog();
     this.conversationEpoch++;
     if (this.isBusy()) {
       this.client.interrupt();
     }
+    this.client.resetConversation();
     this.finishTurn();
     this.messagesEl?.empty();
     this.turn = null;
@@ -971,6 +994,7 @@ export class DarjeelingChat extends Component {
   }
 
   public finishTurn(): void {
+    this.clearTurnWatchdog();
     if (this.turn) {
       void flushPendingRender(this, this.turn);
     }
@@ -1020,6 +1044,7 @@ export class DarjeelingChat extends Component {
   }
 
   public onError(message: string, errorEvent?: { terminal?: boolean }): void {
+    this.clearTurnWatchdog();
     const isTerminal = errorEvent?.terminal !== false;
 
     if (this.lastReportedError === message) {

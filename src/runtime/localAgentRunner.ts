@@ -268,7 +268,7 @@ export class LocalAgentRunner {
       stderrBuffer += typeof chunk === "string" ? chunk : String(chunk);
     });
 
-    this.activeProc.on("close", (code: number | null) => {
+    this.activeProc.on("close", (code: unknown) => {
       if (this.activeProc) {
         LocalAgentRunner.trackedProcesses.delete(this.activeProc);
       }
@@ -285,32 +285,34 @@ export class LocalAgentRunner {
         }
       }
 
+      const numCode = typeof code === "number" ? code : 0;
       this.handlers.onStatus?.({
         type: "dj.status",
         state: "exited",
-        code: code ?? 0,
+        code: numCode,
         stderr: stderrBuffer,
       });
 
-      if (code !== 0 && code !== null) {
+      if (numCode !== 0) {
         if (stderrBuffer) {
-          this.handlers.onError?.(`Process exited with code ${code}: ${stderrBuffer.slice(0, 500)}`);
+          this.handlers.onError?.(`Process exited with code ${numCode}: ${stderrBuffer.slice(0, 500)}`);
         }
       }
     });
 
-    this.activeProc.on("error", (err: Error) => {
+    this.activeProc.on("error", (err: unknown) => {
       if (this.activeProc) {
         LocalAgentRunner.trackedProcesses.delete(this.activeProc);
       }
       this.isRunning = false;
       this.activeProc = null;
-      this.handlers.onError?.(`Process error: ${err.message}`);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.handlers.onError?.(`Process error: ${errMsg}`);
       this.handlers.onStatus?.({
         type: "dj.status",
         state: "exited",
         code: 1,
-        stderr: `Process spawn failed: ${err.message}`,
+        stderr: `Process spawn failed: ${errMsg}`,
       });
     });
 
@@ -443,17 +445,18 @@ export class LocalAgentRunner {
           stderrBuffer += typeof chunk === "string" ? chunk : String(chunk);
         });
 
-        child.on("error", (err: Error) => {
+        child.on("error", (err: unknown) => {
           LocalAgentRunner.trackedProcesses.delete(child);
+          const errMsg = err instanceof Error ? err.message : String(err);
           resolve([
             {
               type: "dj.error",
-              message: `Failed to spawn ${agentBinary}: ${err.message}`,
+              message: `Failed to spawn ${agentBinary}: ${errMsg}`,
             },
           ]);
         });
 
-        child.on("close", (code: number) => {
+        child.on("close", (code: unknown) => {
           LocalAgentRunner.trackedProcesses.delete(child);
           if (stdoutBuffer.trim()) {
             try {
@@ -478,11 +481,12 @@ export class LocalAgentRunner {
             return e.type === "result" || raw.event === "result";
           });
 
-          if (code !== 0 && !hasResult) {
+          const exitCode = typeof code === "number" ? code : 0;
+          if (exitCode !== 0 && !hasResult) {
             resolve([
               {
                 type: "dj.error",
-                message: `Agent exited with code ${code}. ${stderrBuffer.trim()}`,
+                message: `Agent exited with code ${exitCode}. ${stderrBuffer.trim()}`,
               },
             ]);
             return;

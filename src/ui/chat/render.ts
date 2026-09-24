@@ -411,6 +411,12 @@ export function createBubble(
         text: "Direct API",
       });
       syncBadge.title = "Running directly in Obsidian; conversation not synced between devices";
+    } else if (runtimeMode === "local") {
+      const syncBadge = head.createSpan({
+        cls: "dj-conv-badge is-local",
+        text: "Local",
+      });
+      syncBadge.title = "Running on local machine CLI";
     }
   } else if (kind === "user") {
     head.createSpan({ cls: "dj-msg-who", text: "You" });

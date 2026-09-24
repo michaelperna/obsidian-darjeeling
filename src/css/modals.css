@@ -5,21 +5,54 @@
 .modal.dj-session-modal-window {
   max-width: 620px;
   width: 90vw;
+  max-height: calc(100vh - 60px);
   padding: 0;
   border-radius: var(--dj-r-lg, 10px);
   background: var(--background-primary, #0b0e0b);
   border: 1px solid var(--background-modifier-border, #213024);
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal.dj-session-modal-window .modal-content {
+  max-height: calc(100vh - 80px);
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .dj-session-modal {
   display: flex;
   flex-direction: column;
   padding: 24px;
+  max-height: calc(100vh - 100px);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   gap: 16px;
   box-sizing: border-box;
+}
+
+.is-mobile .modal.dj-session-modal-window {
+  width: 96vw;
+  max-width: 96vw;
+  max-height: 88vh;
+  margin: auto;
+}
+
+.is-mobile .modal.dj-session-modal-window .modal-content {
+  max-height: 86vh;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.is-mobile .dj-session-modal {
+  padding: 16px 14px 60px;
+  max-height: calc(86vh - 20px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .dj-session-modal-header {
