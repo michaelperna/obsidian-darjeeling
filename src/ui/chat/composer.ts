@@ -1,10 +1,11 @@
-import { Platform, setIcon } from "obsidian";
+import { Menu, Platform, setIcon } from "obsidian";
 import type { DarjeelingChat } from "./chatView";
 
 export interface QuickAction {
   label: string;
   prompt: string;
   permissionMode?: string;
+  icon?: string;
 }
 
 export const QUICK_ACTIONS: QuickAction[] = [
@@ -14,6 +15,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
       "Read the attached note and review it: unclear claims, missing edge cases, " +
       "what a reader would push back on. Be specific and quote the note.",
     permissionMode: "plan",
+    icon: "file-search",
   },
   {
     label: "Summarise",
@@ -21,6 +23,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
       "Summarise the attached note: decisions made, action items with owners, " +
       "and open questions. Keep it tight.",
     permissionMode: "plan",
+    icon: "align-left",
   },
   {
     label: "Challenge",
@@ -28,11 +31,13 @@ export const QUICK_ACTIONS: QuickAction[] = [
       "Argue against the position in the attached note. Find the weakest link in " +
       "the reasoning and say what evidence would change the conclusion.",
     permissionMode: "plan",
+    icon: "swords",
   },
   {
     label: "Search vault",
     prompt: "Search the vault for everything relevant to: ",
     permissionMode: "plan",
+    icon: "search",
   },
 ];
 
@@ -43,6 +48,7 @@ export interface ComposerElements {
   inputEl: HTMLTextAreaElement;
   sendBtn: HTMLButtonElement;
   stopBtn: HTMLButtonElement;
+  quickMenuBtn?: HTMLButtonElement;
 }
 
 export function getComposerPlaceholder(settings: { sendWithCmdEnter?: boolean; enterToSend?: boolean }): string {
@@ -95,7 +101,13 @@ export function buildComposer(
     },
   });
 
-  inputEl.addEventListener("input", () => chat.growInput());
+  const syncInputState = () => {
+    chat.growInput();
+    const hasText = inputEl.value.trim().length > 0;
+    composerEl.classList.toggle("has-input", hasText);
+  };
+
+  inputEl.addEventListener("input", syncInputState);
   inputEl.addEventListener("keydown", (event: KeyboardEvent) => {
     if (event.isComposing) return;
 
@@ -131,19 +143,49 @@ export function buildComposer(
   });
 
   const bottomRow = composerEl.createDiv({ cls: "dj-composer-bottom-row" });
+
+  const applyAction = (action: QuickAction) => {
+    inputEl.value = action.prompt;
+    chat.setModeOverride(action.permissionMode ?? null);
+    inputEl.focus();
+    inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+    syncInputState();
+  };
+
+  // Compact quick menu trigger for mobile & narrow viewports (zero permanent vertical clutter)
+  const quickMenuBtn = bottomRow.createEl("button", {
+    cls: "dj-quick-menu-btn",
+    attr: {
+      type: "button",
+      "aria-label": "Quick prompt actions",
+      title: "Quick prompt actions",
+    },
+  });
+  const quickIcon = quickMenuBtn.createSpan({ cls: "dj-action-btn-icon" });
+  setIcon(quickIcon, "sparkles");
+  quickMenuBtn.createSpan({ cls: "dj-quick-menu-label", text: "Prompts" });
+
+  quickMenuBtn.addEventListener("click", (evt: MouseEvent) => {
+    evt.preventDefault();
+    const menu = new Menu();
+    for (const action of QUICK_ACTIONS) {
+      menu.addItem((item) => {
+        item.setTitle(action.label);
+        if (action.icon) item.setIcon(action.icon);
+        item.onClick(() => applyAction(action));
+      });
+    }
+    menu.showAtMouseEvent(evt);
+  });
+
+  // Inline chips container for wide desktop viewports
   const chips = bottomRow.createDiv({ cls: "dj-composer-quick-chips dj-chips" });
   for (const action of QUICK_ACTIONS) {
     const chip = chips.createEl("button", {
       cls: "dj-quick-chip dj-chip",
       text: action.label,
     });
-    chip.addEventListener("click", () => {
-      inputEl.value = action.prompt;
-      chat.setModeOverride(action.permissionMode ?? null);
-      inputEl.focus();
-      inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
-      chat.growInput();
-    });
+    chip.addEventListener("click", () => applyAction(action));
   }
 
   const actions = bottomRow.createDiv({ cls: "dj-composer-actions" });
@@ -173,5 +215,6 @@ export function buildComposer(
     inputEl,
     sendBtn,
     stopBtn,
+    quickMenuBtn,
   };
 }

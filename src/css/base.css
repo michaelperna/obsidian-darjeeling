@@ -146,16 +146,11 @@
 
 @container darjeeling (max-width: 520px) {
   .dj-composer-quick-chips {
-    display: flex;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    max-width: 100%;
-    padding-bottom: 2px;
+    display: none !important;
   }
-  .dj-composer-quick-chips::-webkit-scrollbar {
-    display: none;
+
+  .dj-quick-menu-btn {
+    display: inline-flex !important;
   }
 
   .dj-composer-island {
@@ -253,6 +248,16 @@
   margin-bottom: calc(max(var(--mobile-navbar-height, 0px), var(--mobile-toolbar-height, 0px), 48px) + 2px) !important;
 }
 
+.is-mobile .darjeeling-root .dj-composer-quick-chips,
+.is-mobile .dj-composer-quick-chips {
+  display: none !important;
+}
+
+.is-mobile .darjeeling-root .dj-quick-menu-btn,
+.is-mobile .dj-quick-menu-btn {
+  display: inline-flex !important;
+}
+
 /* ================= Global Baseline: Touch Ergonomics (DM-06) ================= */
 @media (pointer: coarse) {
   .darjeeling-root .dj-btn,
@@ -298,6 +303,16 @@
     font-size: var(--dj-font-size-ui, 13px);
     display: inline-flex;
     align-items: center;
+  }
+
+  .darjeeling-root .dj-composer-quick-chips {
+    display: none !important;
+  }
+
+  .darjeeling-root .dj-quick-menu-btn {
+    display: inline-flex !important;
+    min-height: 36px;
+    padding: 6px 12px;
   }
 
   .darjeeling-root .dj-quick-chip {

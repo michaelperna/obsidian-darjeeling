@@ -224,6 +224,7 @@ test("dj.error drains the queue", async () => {
   // finishTurn should have freed the lock and drained Turn 2
   assert.equal(chat.isBusy(), true); // Now busy executing Turn 2!
   assert.equal((chat as any).dispatcher.getQueuedCount(), 0);
+  chat.clearTurnWatchdog();
 });
 
 test("answer only in result is shown when streaming yields no chunks", async () => {
