@@ -2,6 +2,7 @@
 # cmd-release-dry-run.sh -- lab.sh release-dry-run implementation (S4-E1, G-14)
 set -euo pipefail
 
+# shellcheck disable=SC2034
 cmd_release_dry_run() {
     local version="1.0.0" fetch_dir=""
     while [ $# -gt 0 ]; do

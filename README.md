@@ -1,6 +1,17 @@
-# Project Darjeeling
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/darjeeling-dark-squircle.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/darjeeling-logo-squircle.png">
+    <img alt="Project Darjeeling" src="assets/darjeeling-dark-squircle.png" width="160" height="160">
+  </picture>
+</p>
 
-> Run Claude Code and other AI agents on your own Linux server and pick up the same sessions on desktop or phone. Includes chat, phase-gated plans saved as notes, a remote terminal, and direct chat with AI providers.
+<h1 align="center">Project Darjeeling</h1>
+
+<p align="center">
+  <strong>Run Claude Code and other AI agents on your own Linux server and pick up the same sessions on desktop or phone.</strong><br>
+  <em>Includes chat, phase-gated plans saved as notes, a remote terminal, and direct chat with AI providers.</em>
+</p>
 
 ---
 
