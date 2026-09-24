@@ -1,6 +1,7 @@
 import { App, Modal, Notice, setIcon } from "obsidian";
 import type { ConversationSummary } from "../net/sessionManager";
 import type DarjeelingPlugin from "../main";
+import { promptText } from "./modals/textPrompt";
 
 export class ConversationsSheetModal extends Modal {
   private searchQuery = "";
@@ -202,11 +203,16 @@ export class ConversationsSheetModal extends Modal {
     setIcon(renameBtn, "pencil");
     renameBtn.addEventListener("click", (evt) => {
       evt.stopPropagation();
-      const newTitle = window.prompt("New conversation title:", displayTitle);
-      if (newTitle && newTitle.trim()) {
-        summary.title = newTitle.trim();
-        this.renderList(container.parentElement || container);
-      }
+      void (async () => {
+        const newTitle = await promptText(this.app, {
+          title: "Rename conversation",
+          defaultValue: displayTitle,
+        });
+        if (newTitle && newTitle.trim()) {
+          summary.title = newTitle.trim();
+          this.renderList(container.parentElement || container);
+        }
+      })();
     });
 
     // Copy resume command button (VTH-37)

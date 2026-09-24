@@ -237,7 +237,7 @@ export class DarjeelingOnboardingView {
       "curl -fsSL https://github.com/michaelperna/obsidian-darjeeling/releases/latest/download/install.sh | sudo bash -s -- --yes";
 
     const snippetBox = body.createDiv({ cls: "dj-code-snippet-box" });
-    const codeEl = snippetBox.createEl("code", { text: installCmd });
+    snippetBox.createEl("code", { text: installCmd });
     const copyBtn = snippetBox.createEl("button", {
       cls: "dj-btn dj-btn-xs",
       text: "Copy",
@@ -473,8 +473,8 @@ export class DarjeelingOnboardingView {
             phoneContent.empty();
 
             const codeCard = phoneContent.createDiv({ cls: "dj-code-card" });
-            codeCard.createEl("div", { cls: "dj-code-label", text: "8-digit pairing code (valid for 5 min):" });
-            codeCard.createEl("div", { cls: "dj-code-value", text: codeRes.formatted_code });
+            codeCard.createDiv({ cls: "dj-code-label", text: "8-digit pairing code (valid for 5 min):" });
+            codeCard.createDiv({ cls: "dj-code-value", text: codeRes.formatted_code });
             const copyCodeBtn = codeCard.createEl("button", {
               cls: "dj-btn dj-btn-secondary dj-btn-sm",
               text: "Copy code",
@@ -485,7 +485,7 @@ export class DarjeelingOnboardingView {
             });
 
             const urlCard = phoneContent.createDiv({ cls: "dj-url-card" });
-            urlCard.createEl("div", { cls: "dj-url-label", text: "Server URL:" });
+            urlCard.createDiv({ cls: "dj-url-label", text: "Server URL:" });
             urlCard.createEl("code", { text: host.baseUrl });
             const copyUrlBtn = urlCard.createEl("button", {
               cls: "dj-btn dj-btn-secondary dj-btn-sm",
@@ -633,7 +633,7 @@ export class DarjeelingOnboardingView {
         this.render();
 
         // Complete!
-        await new Promise((resolve) => setTimeout(resolve, 600));
+        await new Promise((resolve) => window.setTimeout(resolve, 600));
         this.setStep("s4_done");
       } catch (err: unknown) {
         this.checkingProgress.reachable = false;

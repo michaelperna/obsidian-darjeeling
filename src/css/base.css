@@ -65,8 +65,8 @@
   .darjeeling-root *,
   .darjeeling-root *::before,
   .darjeeling-root *::after,
-  .modal-container:has(.dj-modal) *,
   .dj-modal,
+  .dj-modal *,
   .dj-tea-cup-anim,
   .dj-swirling-teacup * {
     animation-duration: 0.01ms;
@@ -81,8 +81,7 @@
 @container darjeeling (max-width: 620px) {
   .dj-header-row {
     flex-wrap: wrap;
-    row-gap: 8px;
-    column-gap: 6px;
+    gap: 8px 6px;
     padding: 8px 10px 6px 10px;
     min-height: auto;
   }

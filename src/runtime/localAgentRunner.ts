@@ -13,13 +13,14 @@ import type {
   TurnOptions,
 } from "../net/agentClient";
 import {
+  ChildProcessLike,
   getNodeChildProcess,
   getNodeFs,
   getNodePath,
   getNodeProcess,
 } from "../platform/node";
 
-type LocalChildProcess = ReturnType<NonNullable<ReturnType<typeof getNodeChildProcess>>["spawn"]>;
+type LocalChildProcess = ChildProcessLike;
 
 export function detectLocalBinary(requestedAgent: string): string | null {
   if (!Platform.isDesktop) return null;

@@ -293,20 +293,20 @@
   height: 10px;
 }
 
-.dj-composer-textarea {
+.darjeeling-root textarea.dj-composer-textarea {
   width: 100%;
-  border: none !important;
-  outline: none !important;
-  background: transparent !important;
-  color: var(--text-normal) !important;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-normal);
   font-family: var(--dj-font-ui);
   font-size: 16px;
   line-height: 1.5;
   resize: none;
-  padding: 2px 4px !important;
+  padding: 2px 4px;
   min-height: 36px;
   max-height: 180px;
-  box-shadow: none !important;
+  box-shadow: none;
 }
 
 .dj-composer-bottom-row {
@@ -407,10 +407,10 @@
    Queued Messages & Queue Bar (.dj-msg.is-queued, .dj-queue-indicator)
    ========================================================================== */
 
-.dj-msg.is-user.is-queued {
+.darjeeling-root .dj-msg.is-user.is-queued {
   opacity: 0.82;
-  border: 1px dashed var(--dj-accent-edge, rgba(224, 130, 46, 0.45)) !important;
-  background: var(--dj-surface, rgba(255, 255, 255, 0.03)) !important;
+  border: 1px dashed var(--dj-accent-edge, rgba(224, 130, 46, 0.45));
+  background: var(--dj-surface, rgba(255, 255, 255, 0.03));
   position: relative;
   transition: all 0.2s ease;
 }
@@ -515,196 +515,205 @@
    Darjeeling Quick Settings Modal (.dj-settings-modal-window)
    ========================================================================== */
 
-.modal.dj-settings-modal-window {
-  width: min(780px, 94vw) !important;
-  max-width: 780px !important;
-  height: min(82vh, 760px) !important;
-  max-height: calc(100vh - 70px) !important;
-  min-height: 380px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  padding: 0 !important;
-  margin: auto !important;
-  position: relative !important;
-  border-radius: 16px !important;
-  background: var(--background-primary, #0c120d) !important;
-  border: 1px solid var(--dj-border, #213024) !important;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(224, 130, 46, 0.12) !important;
-  overflow: hidden !important;
-  box-sizing: border-box !important;
+body .modal-container .modal.dj-settings-modal-window {
+  width: min(780px, 94vw);
+  max-width: 780px;
+  height: min(82vh, 760px);
+  max-height: calc(100vh - 70px);
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  margin: auto;
+  position: relative;
+  border-radius: 16px;
+  background: var(--background-primary, #0c120d);
+  border: 1px solid var(--dj-border, #213024);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(224, 130, 46, 0.12);
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
-.modal.dj-settings-modal-window .modal-content.dj-settings-modal-content,
-.modal.dj-settings-modal-window .modal-content,
+body .modal-container .modal.dj-settings-modal-window .modal-content.dj-settings-modal-content,
+body .modal-container .modal.dj-settings-modal-window .modal-content,
 .dj-settings-modal-content {
-  display: flex !important;
-  flex-direction: column !important;
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
-  height: 100% !important;
-  max-height: 100% !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  overflow: hidden !important;
-  box-sizing: border-box !important;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .dj-settings-modal-header {
-  flex: 0 0 auto !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  padding: 14px 20px !important;
-  background: var(--background-secondary, #0a0f0b) !important;
-  border-bottom: 1px solid var(--dj-border, #213024) !important;
-  box-sizing: border-box !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  z-index: 10 !important;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: var(--background-secondary, #0a0f0b);
+  border-bottom: 1px solid var(--dj-border, #213024);
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  z-index: 10;
 }
 
 .dj-settings-modal-title-row {
-  display: flex !important;
-  align-items: center !important;
-  gap: 10px !important;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .dj-settings-modal-icon {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  width: 32px !important;
-  height: 32px !important;
-  border-radius: 8px !important;
-  background: var(--dj-accent-wash, rgba(224, 130, 46, 0.12)) !important;
-  color: var(--dj-accent-bright, #f1a259) !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--dj-accent-wash, rgba(224, 130, 46, 0.12));
+  color: var(--dj-accent-bright, #f1a259);
 }
 
 .dj-settings-modal-icon svg {
-  width: 18px !important;
-  height: 18px !important;
+  width: 18px;
+  height: 18px;
 }
 
 .dj-settings-modal-title-row h2 {
-  margin: 0 !important;
-  font-family: var(--dj-font-serif, "Playfair Display", Georgia, serif) !important;
-  font-size: 19px !important;
-  font-weight: 600 !important;
-  color: var(--text-normal, #e8ede9) !important;
+  margin: 0;
+  font-family: var(--dj-font-serif, "Playfair Display", Georgia, serif);
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--text-normal, #e8ede9);
 }
 
 .dj-settings-modal-header-actions {
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .dj-settings-modal-body,
 .dj-settings-tab,
-.vertical-tab-content.darjeeling-root {
-  display: block !important;
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
-  height: auto !important;
-  max-height: none !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-  padding: 16px 20px 24px 20px !important;
-  scroll-behavior: smooth !important;
-  -webkit-overflow-scrolling: touch !important;
-  overscroll-behavior: contain !important;
-  box-sizing: border-box !important;
+body .vertical-tab-content.darjeeling-root {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  max-height: none;
+  width: 100%;
+  max-width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 20px 24px 20px;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
 }
 
 .dj-settings-modal-body *,
-.dj-settings-tab * {
-  box-sizing: border-box !important;
+.dj-settings-tab *,
+body .vertical-tab-content.darjeeling-root * {
+  box-sizing: border-box;
 }
 
 /* Ensure setting items wrap cleanly and never cause horizontal scroll */
 .dj-settings-modal-body .setting-item,
-.dj-settings-tab .setting-item {
-  border-top: 1px solid var(--dj-border, #1c291e) !important;
-  padding: 12px 0 !important;
-  display: flex !important;
-  flex-direction: row !important;
-  flex-wrap: nowrap !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: 16px !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  min-height: auto !important;
-  height: auto !important;
-  max-height: none !important;
-  overflow: visible !important;
-  flex-shrink: 0 !important;
+.dj-settings-tab .setting-item,
+body .vertical-tab-content.darjeeling-root .setting-item {
+  border-top: 1px solid var(--dj-border, #1c291e);
+  padding: 12px 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  min-height: auto;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  flex-shrink: 0;
 }
 
 /* Section Headings */
 .dj-settings-modal-body .setting-item.setting-item-heading,
-.dj-settings-tab .setting-item.setting-item-heading {
-  border-top: none !important;
-  padding-top: 24px !important;
-  padding-bottom: 6px !important;
-  align-items: flex-end !important;
+.dj-settings-tab .setting-item.setting-item-heading,
+body .vertical-tab-content.darjeeling-root .setting-item.setting-item-heading {
+  border-top: none;
+  padding-top: 24px;
+  padding-bottom: 6px;
+  align-items: flex-end;
 }
 
 .dj-settings-modal-body .setting-item.setting-item-heading:first-child,
-.dj-settings-tab .setting-item.setting-item-heading:first-child {
-  padding-top: 4px !important;
+.dj-settings-tab .setting-item.setting-item-heading:first-child,
+body .vertical-tab-content.darjeeling-root .setting-item.setting-item-heading:first-child {
+  padding-top: 4px;
 }
 
 .dj-settings-modal-body .setting-item.setting-item-heading .setting-item-name,
-.dj-settings-tab .setting-item.setting-item-heading .setting-item-name {
-  font-size: 15px !important;
-  font-weight: 600 !important;
-  color: var(--text-normal) !important;
-  letter-spacing: -0.01em !important;
+.dj-settings-tab .setting-item.setting-item-heading .setting-item-name,
+body .vertical-tab-content.darjeeling-root .setting-item.setting-item-heading .setting-item-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-normal);
+  letter-spacing: -0.01em;
 }
 
 .dj-settings-modal-body .setting-item-info,
-.dj-settings-tab .setting-item-info {
-  flex: 1 1 auto !important;
-  min-width: 0 !important;
-  max-width: 100% !important;
-  word-break: break-word !important;
-  overflow-wrap: break-word !important;
-  overflow: visible !important;
+.dj-settings-tab .setting-item-info,
+body .vertical-tab-content.darjeeling-root .setting-item-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  overflow: visible;
 }
 
 .dj-settings-modal-body .setting-item-name,
-.dj-settings-tab .setting-item-name {
-  font-weight: 500 !important;
-  font-size: 13.5px !important;
-  line-height: 1.4 !important;
-  color: var(--text-normal) !important;
+.dj-settings-tab .setting-item-name,
+body .vertical-tab-content.darjeeling-root .setting-item-name {
+  font-weight: 500;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--text-normal);
 }
 
 .dj-settings-modal-body .setting-item-description,
-.dj-settings-tab .setting-item-description {
-  color: var(--text-muted) !important;
-  font-size: 12px !important;
-  line-height: 1.45 !important;
-  word-break: break-word !important;
-  margin-top: 3px !important;
+.dj-settings-tab .setting-item-description,
+body .vertical-tab-content.darjeeling-root .setting-item-description {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: break-word;
+  margin-top: 3px;
 }
 
 .dj-settings-modal-body .setting-item-control,
-.dj-settings-tab .setting-item-control {
-  flex: 0 0 auto !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: flex-end !important;
-  gap: 8px !important;
-  flex-wrap: nowrap !important;
-  min-width: 0 !important;
-  max-width: 60% !important;
-  overflow: visible !important;
+.dj-settings-tab .setting-item-control,
+body .vertical-tab-content.darjeeling-root .setting-item-control {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
+  max-width: 60%;
+  overflow: visible;
 }
 
 .dj-settings-modal-body input[type="text"],
@@ -712,92 +721,101 @@
 .dj-settings-modal-body input[type="number"],
 .dj-settings-tab input[type="text"],
 .dj-settings-tab input[type="password"],
-.dj-settings-tab input[type="number"] {
-  max-width: min(100%, 320px) !important;
-  min-width: 0 !important;
-  box-sizing: border-box !important;
+.dj-settings-tab input[type="number"],
+body .vertical-tab-content.darjeeling-root input[type="text"],
+body .vertical-tab-content.darjeeling-root input[type="password"],
+body .vertical-tab-content.darjeeling-root input[type="number"] {
+  max-width: min(100%, 320px);
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .dj-settings-modal-body textarea,
-.dj-settings-tab textarea {
-  max-width: min(100%, 380px) !important;
-  min-width: 0 !important;
-  box-sizing: border-box !important;
+.dj-settings-tab textarea,
+body .vertical-tab-content.darjeeling-root textarea {
+  max-width: min(100%, 380px);
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .dj-settings-modal-body select,
-.dj-settings-tab select {
-  max-width: min(100%, 320px) !important;
-  min-width: 0 !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  box-sizing: border-box !important;
+.dj-settings-tab select,
+body .vertical-tab-content.darjeeling-root select {
+  max-width: min(100%, 320px);
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .dj-settings-modal-body .dj-diag,
-.dj-settings-tab .dj-diag {
-  max-width: 100% !important;
-  width: 100% !important;
-  overflow-x: auto !important;
-  word-break: break-all !important;
-  white-space: pre-wrap !important;
-  box-sizing: border-box !important;
+.dj-settings-tab .dj-diag,
+body .vertical-tab-content.darjeeling-root .dj-diag {
+  max-width: 100%;
+  width: 100%;
+  overflow-x: auto;
+  word-break: break-all;
+  white-space: pre-wrap;
+  box-sizing: border-box;
 }
 
 .dj-settings-modal-body .dj-settings-banner,
-.dj-settings-tab .dj-settings-banner {
-  max-width: 100% !important;
-  width: 100% !important;
-  box-sizing: border-box !important;
+.dj-settings-tab .dj-settings-banner,
+body .vertical-tab-content.darjeeling-root .dj-settings-banner {
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .dj-settings-modal-footer {
-  flex: 0 0 auto !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  padding: 12px 20px !important;
-  background: var(--background-secondary, #0a0f0b) !important;
-  border-top: 1px solid var(--dj-border, #213024) !important;
-  box-sizing: border-box !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  z-index: 10 !important;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--background-secondary, #0a0f0b);
+  border-top: 1px solid var(--dj-border, #213024);
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  z-index: 10;
 }
 
 .dj-settings-modal-status {
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 6px !important;
-  font-size: 12px !important;
-  color: var(--text-muted) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .dj-settings-status-icon svg {
-  width: 14px !important;
-  height: 14px !important;
-  color: var(--dj-tea-green, #4ade80) !important;
+  width: 14px;
+  height: 14px;
+  color: var(--dj-tea-green, #4ade80);
 }
 
 @media (max-width: 640px) {
-  .modal.dj-settings-modal-window {
-    width: 96vw !important;
-    height: 92vh !important;
-    max-height: calc(100vh - 40px) !important;
-    border-radius: 12px !important;
+  body .modal-container .modal.dj-settings-modal-window {
+    width: 96vw;
+    height: 92vh;
+    max-height: calc(100vh - 40px);
+    border-radius: 12px;
   }
   .dj-settings-modal-body .setting-item:not(.setting-item-heading),
-  .dj-settings-tab .setting-item:not(.setting-item-heading) {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 8px !important;
+  .dj-settings-tab .setting-item:not(.setting-item-heading),
+  body .vertical-tab-content.darjeeling-root .setting-item:not(.setting-item-heading) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
   .dj-settings-modal-body .setting-item:not(.setting-item-heading) .setting-item-control,
-  .dj-settings-tab .setting-item:not(.setting-item-heading) .setting-item-control {
-    width: 100% !important;
-    max-width: 100% !important;
-    justify-content: flex-start !important;
+  .dj-settings-tab .setting-item:not(.setting-item-heading) .setting-item-control,
+  body .vertical-tab-content.darjeeling-root .setting-item:not(.setting-item-heading) .setting-item-control {
+    width: 100%;
+    max-width: 100%;
+    justify-content: flex-start;
   }
   .dj-settings-modal-body select,
   .dj-settings-modal-body input[type="text"],
@@ -806,9 +824,13 @@
   .dj-settings-tab select,
   .dj-settings-tab input[type="text"],
   .dj-settings-tab input[type="password"],
-  .dj-settings-tab input[type="number"] {
-    max-width: 100% !important;
-    width: 100% !important;
+  .dj-settings-tab input[type="number"],
+  body .vertical-tab-content.darjeeling-root select,
+  body .vertical-tab-content.darjeeling-root input[type="text"],
+  body .vertical-tab-content.darjeeling-root input[type="password"],
+  body .vertical-tab-content.darjeeling-root input[type="number"] {
+    max-width: 100%;
+    width: 100%;
   }
 }
 
@@ -837,16 +859,6 @@
   color: var(--dj-text-muted);
   background: rgba(0, 0, 0, 0.08);
   font-style: italic;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .darjeeling-root *,
-  .darjeeling-root *::before,
-  .darjeeling-root *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-  }
 }
 
 /* Remote Daemon Offline Fallback Card */
@@ -976,13 +988,13 @@
    --------------------------------------------------------------------------
    Preserves full saturation and contrast on sidebar ribbon and workspace tab.
    ========================================================================== */
-.side-dock-ribbon-action[aria-label*="Darjeeling"] svg,
-.side-dock-ribbon-action svg.darjeeling-leaf,
-.side-dock-ribbon-action svg.darjeeling-tea-stone,
-.workspace-tab-header[data-type="darjeeling-view"] .workspace-tab-header-inner-icon svg,
-svg.svg-icon.darjeeling-leaf,
-svg.svg-icon.darjeeling-tea-stone {
-  opacity: 1 !important;
+body .side-dock-ribbon-action[aria-label*="Darjeeling"] svg,
+body .side-dock-ribbon-action svg.darjeeling-leaf,
+body .side-dock-ribbon-action svg.darjeeling-tea-stone,
+body .workspace-tab-header[data-type="darjeeling-view"] .workspace-tab-header-inner-icon svg,
+body svg.svg-icon.darjeeling-leaf,
+body svg.svg-icon.darjeeling-tea-stone {
+  opacity: 1;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
   transition: transform 0.15s ease, filter 0.15s ease;
 }

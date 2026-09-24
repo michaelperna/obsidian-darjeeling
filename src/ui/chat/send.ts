@@ -227,13 +227,14 @@ export class TurnDispatcher {
       });
       clearBtn.addEventListener("click", () => {
         this.clearQueue();
-        const noticeFragment = document.createDocumentFragment();
-        noticeFragment.appendChild(document.createTextNode("Queue cleared. "));
-        const undoLink = document.createElement("a");
-        undoLink.textContent = "Undo";
-        undoLink.className = "dj-undo-link";
-        undoLink.onclick = () => this.undoClearQueue();
-        noticeFragment.appendChild(undoLink);
+        const noticeFragment = createFragment((frag) => {
+          frag.appendText("Queue cleared. ");
+          const undoLink = frag.createEl("a", {
+            text: "Undo",
+            cls: "dj-undo-link",
+          });
+          undoLink.onclick = () => this.undoClearQueue();
+        });
         new Notice(noticeFragment, 5000);
       });
     } else {
@@ -249,13 +250,14 @@ export class TurnDispatcher {
       });
       clearBtn.addEventListener("click", () => {
         this.clearQueue();
-        const noticeFragment = document.createDocumentFragment();
-        noticeFragment.appendChild(document.createTextNode("Queue cleared. "));
-        const undoLink = document.createElement("a");
-        undoLink.textContent = "Undo";
-        undoLink.className = "dj-undo-link";
-        undoLink.onclick = () => this.undoClearQueue();
-        noticeFragment.appendChild(undoLink);
+        const noticeFragment = createFragment((frag) => {
+          frag.appendText("Queue cleared. ");
+          const undoLink = frag.createEl("a", {
+            text: "Undo",
+            cls: "dj-undo-link",
+          });
+          undoLink.onclick = () => this.undoClearQueue();
+        });
         new Notice(noticeFragment, 5000);
       });
     }

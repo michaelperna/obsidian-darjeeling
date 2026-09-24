@@ -83,6 +83,7 @@ export interface LocalProcessOptions {
 }
 
 import {
+  ChildProcessLike,
   getNodeChildProcess,
   getNodeFs,
   getNodeProcess,
@@ -132,7 +133,7 @@ export function getDefaultShell(): string {
   return "powershell.exe";
 }
 
-type LocalChildProcess = ReturnType<NonNullable<ReturnType<typeof getNodeChildProcess>>["spawn"]>;
+type LocalChildProcess = ChildProcessLike;
 
 /**
  * Cross-platform local terminal process runner.
@@ -282,7 +283,7 @@ export class LocalTerminalProcess {
     }
   }
 
-  kill(signal: NodeJS.Signals | number = "SIGTERM"): void {
+  kill(signal: string | number = "SIGTERM"): void {
     if (!this._isRunning || !this.proc) return;
     try {
       this.proc.kill(signal);

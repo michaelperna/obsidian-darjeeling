@@ -67,7 +67,7 @@ export class ConfirmModal extends Modal {
           .setButtonText(this.options.confirmLabel ?? "Allow bypass")
           .setCta();
         if (this.options.destructive !== false) {
-          btn.setWarning();
+          btn.setDestructive();
         }
         btn.onClick(() => {
           this.confirmed = true;

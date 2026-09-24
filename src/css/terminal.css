@@ -61,7 +61,7 @@
 }
 
 .dj-terminal-session-bar.is-hidden {
-  display: none !important;
+  display: none;
 }
 
 .dj-terminal-session-bar .dj-select {
@@ -83,7 +83,7 @@
 .dj-terminal-host .xterm { height: 100%; padding: 0; }
 
 .dj-terminal-host .xterm-viewport {
-  background-color: transparent !important;
+  background-color: transparent;
   scrollbar-width: thin;
   scrollbar-color: var(--dj-leaf-600) transparent;
 }
@@ -155,7 +155,7 @@
 }
 
 .dj-keybar.is-hidden {
-  display: none !important;
+  display: none;
 }
 
 .dj-key.is-active {

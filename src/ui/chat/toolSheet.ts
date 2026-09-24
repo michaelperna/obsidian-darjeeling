@@ -1,5 +1,5 @@
 import { App, Modal, Notice, setIcon } from "obsidian";
-import { escapeHtml, sanitizeUntrustedMarkdown, setupRemoteMediaHandlers } from "./render";
+import { setupRemoteMediaHandlers } from "./render";
 import { writeClipboard } from "../terminal/clipboard";
 
 export interface ToolCallDetail {

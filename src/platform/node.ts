@@ -1,12 +1,60 @@
 import { Platform } from "obsidian";
-import type * as ChildProcess from "child_process";
-import type * as Fs from "fs";
-import type * as Path from "path";
 
 export interface NodeProcess {
   platform: string;
   env: Record<string, string | undefined>;
   cwd?(): string;
+}
+
+export interface ChildProcessLike {
+  pid?: number;
+  killed?: boolean;
+  stdout?: {
+    on(event: string, listener: (...args: any[]) => void): unknown;
+    pipe?(dest: unknown): unknown;
+    setEncoding(encoding: string): unknown;
+  } | null;
+  stderr?: {
+    on(event: string, listener: (...args: any[]) => void): unknown;
+    setEncoding(encoding: string): unknown;
+  } | null;
+  stdin?: {
+    write(chunk: unknown, encoding?: string): boolean;
+    end(): unknown;
+    destroyed?: boolean;
+  } | null;
+  stdio?: unknown[];
+  kill(signal?: string | number): boolean;
+  on(event: string, listener: (...args: any[]) => void): unknown;
+  once(event: string, listener: (...args: any[]) => void): unknown;
+}
+
+export interface NodeChildProcessModule {
+  spawn(command: string, args?: readonly string[], options?: unknown): ChildProcessLike;
+  exec(
+    command: string,
+    options: unknown,
+    callback?: (error: Error | null, stdout: string, stderr?: string) => void
+  ): unknown;
+}
+
+export interface NodeFsModule {
+  existsSync(path: string): boolean;
+  realpathSync(path: string): string;
+  accessSync(path: string, mode?: number): void;
+  constants: {
+    X_OK: number;
+    [key: string]: number;
+  };
+}
+
+export interface NodePathModule {
+  join(...paths: string[]): string;
+  resolve(...paths: string[]): string;
+  isAbsolute(path: string): boolean;
+  dirname(path: string): string;
+  basename(path: string): string;
+  delimiter: string;
 }
 
 declare const require: ((id: string) => unknown) | undefined;
@@ -20,19 +68,19 @@ function getRequire(): ((id: string) => unknown) | null {
 }
 
 export function getNodeProcess(): NodeProcess | undefined {
-  if (typeof process !== "undefined") return process;
-  if (typeof window !== "undefined" && (window as unknown as { process?: NodeProcess }).process) {
-    return (window as unknown as { process: NodeProcess }).process;
+  if (typeof window !== "undefined") {
+    const win = window as unknown as { process?: NodeProcess };
+    if (typeof win.process !== "undefined") return win.process;
   }
   return undefined;
 }
 
-export function getNodeChildProcess(): typeof ChildProcess | null {
+export function getNodeChildProcess(): NodeChildProcessModule | null {
   if (!Platform.isDesktopApp && !Platform.isDesktop) return null;
   const req = getRequire();
   if (req) {
     try {
-      return req("child_process") as typeof ChildProcess;
+      return req("child_process") as NodeChildProcessModule;
     } catch {
       return null;
     }
@@ -40,12 +88,12 @@ export function getNodeChildProcess(): typeof ChildProcess | null {
   return null;
 }
 
-export function getNodeFs(): typeof Fs | null {
+export function getNodeFs(): NodeFsModule | null {
   if (!Platform.isDesktopApp && !Platform.isDesktop) return null;
   const req = getRequire();
   if (req) {
     try {
-      return req("fs") as typeof Fs;
+      return req("fs") as NodeFsModule;
     } catch {
       return null;
     }
@@ -53,12 +101,12 @@ export function getNodeFs(): typeof Fs | null {
   return null;
 }
 
-export function getNodePath(): typeof Path | null {
+export function getNodePath(): NodePathModule | null {
   if (!Platform.isDesktopApp && !Platform.isDesktop) return null;
   const req = getRequire();
   if (req) {
     try {
-      return req("path") as typeof Path;
+      return req("path") as NodePathModule;
     } catch {
       return null;
     }

@@ -1,8 +1,7 @@
-import { App, Modal, Notice, Platform, Setting, setIcon, requestUrl } from "obsidian";
+import { App, Modal, Platform, setIcon, requestUrl } from "obsidian";
 import type DarjeelingPlugin from "../../main";
 import {
   DirectApiProvider,
-  RemoteHostConfig,
   RuntimeMode,
 } from "../../settings/schema";
 import {
@@ -572,7 +571,7 @@ export class DarjeelingNewSessionModal extends Modal {
 
       // No token found: probe /health to check reachability without faking "Connected"
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Connection timed out (2.5s)")), 2500)
+        window.setTimeout(() => reject(new Error("Connection timed out (2.5s)")), 2500)
       );
       // egress: host-http
       const healthPromise = requestUrl({

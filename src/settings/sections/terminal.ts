@@ -60,7 +60,6 @@ export function displayTerminalSettings(
       slider
         .setLimits(9, 22, 1)
         .setValue(plugin.settings.fontSize)
-        .setDynamicTooltip()
         .onChange(async (value) => {
           plugin.settings.fontSize = value;
           await plugin.saveSettings();
@@ -129,7 +128,7 @@ export function displayTerminalSettings(
       setting.addButton((btn) =>
         btn
           .setButtonText("Delete")
-          .setWarning()
+          .setDestructive()
           .onClick(async () => {
             plugin.settings.terminalProfiles.splice(i, 1);
             if (plugin.settings.activeTerminalProfileId === prof.id) {
