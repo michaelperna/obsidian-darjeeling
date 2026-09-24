@@ -16,29 +16,32 @@ When connecting a new device:
 
 ## 2. Pairing Methods
 
-### A. QR Code Pairing (Desktop to Mobile)
-The fastest way to connect a smartphone or tablet:
-1. In desktop Obsidian, open **Settings > Darjeeling > Connections > Pair New Device** (or run `darjeeling pair` on the server terminal).
-2. A QR code is displayed encoding a secure deep-link URI:
-   `obsidian://darjeeling?action=pair&url=https%3A%2F%2Fworkstation.tailnet.ts.net&code=48291038`
-3. Scan the QR code with your phone camera or barcode scanner.
-4. Obsidian opens and displays the **Pairing Confirmation Modal**, naming the server and target host URL.
-5. Tap **Confirm & Pair** to complete authentication.
+### A. 8-Digit Pairing Code (Primary & Universal)
+Because Obsidian Mobile (iOS and Android) operates inside a sandboxed WebView without OS camera entitlements, plugins cannot access device cameras or scan barcodes in-app. The temporary 8-digit pairing code is the fastest, most reliable way to connect any mobile device or laptop.
 
-### B. Manual Code Entry
-If you cannot scan a QR code:
-1. On your companion server, generate a code:
-<!-- not-run: operational command -->
-```bash
-darjeeling pair
-# Output:
-# Temporary pairing code: 4829-1038 (valid for 5 minutes)
-```
-2. In Obsidian on your phone or laptop:
-   - Open **Settings > Darjeeling > Connections**.
-   - Enter your server URL (e.g. `https://workstation.tailnet.ts.net` or `http://100.101.102.103:8765`).
-   - Enter the 8-digit pairing code.
+1. **Generate a temporary code** (valid for 5 minutes):
+   - **On your companion server terminal**:
+   <!-- not-run: operational command -->
+   ```bash
+   darjeeling pair
+   # Output:
+   # Temporary pairing code: 4829-1038 (valid for 5 minutes)
+   ```
+   - **Or in desktop Obsidian**: At the end of onboarding or in **Settings > Darjeeling > Connections**, click **Generate pairing code**.
+
+2. **Claim on your phone or secondary device**:
+   - Open Obsidian on your phone or tablet.
+   - Open the Command Palette (`Cmd/Ctrl+P` or pull down) and select **Darjeeling: Pair with server** (or navigate to **Settings > Darjeeling > Connections**).
+   - Enter your Server URL (e.g. `http://100.x.y.z:8765` or `https://workstation.tailnet.ts.net`).
+   - Enter the 8-digit pairing code (e.g. `4829-1038`).
    - Tap **Pair Device**.
+   - The server validates the code, registers the device, and persists an authenticated bearer token.
+
+### B. Obsidian Protocol Deep Links
+If opened via an external browser or deep link:
+- A link formatted as `obsidian://darjeeling?action=pair&url=https%3A%2F%2Fworkstation.tailnet.ts.net&code=48291038` opens Obsidian and presents the **Pairing Confirmation Modal** prefilled with host details.
+- Tap **Confirm & Pair** to complete authorization.
+
 
 ---
 

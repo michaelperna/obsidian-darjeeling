@@ -2,7 +2,6 @@ import { Notice, Platform, setIcon } from "obsidian";
 import type DarjeelingPlugin from "../../main";
 import { getTeaLeafBranchSvg } from "../illustrations";
 import { pairDevice, requestPairCode, validateServerUrl, type PairDeviceResult } from "../../net/pairing";
-import { generateQrSvg } from "../../net/qr";
 import type { HostConfig } from "../../settings/schema";
 
 export type OnboardingStep =
@@ -281,115 +280,68 @@ export class DarjeelingOnboardingView {
   private renderS2Pair(): void {
     this.renderHeader(
       "Pair this device",
-      "Enter your server details or scan the terminal QR code to authorize this device."
+      "Enter your companion server details and 8-digit pairing code to authorize this device."
     );
 
     const body = this.containerEl.createDiv({ cls: "dj-onboarding-step-body" });
 
-    const tabsContainer = body.createDiv({ cls: "dj-tablist", attr: { role: "tablist" } });
-    const codeTabBtn = tabsContainer.createEl("button", {
-      cls: "dj-tab is-active",
-      text: "Enter code",
-      attr: { role: "tab", "aria-selected": "true" },
-    });
-    const scanTabBtn = tabsContainer.createEl("button", {
-      cls: "dj-tab",
-      text: "Scan QR",
-      attr: { role: "tab", "aria-selected": "false" },
+    const infoNotice = body.createDiv({ cls: "dj-callout" });
+    const infoIcon = infoNotice.createSpan({ cls: "dj-callout-icon" });
+    setIcon(infoIcon, "info");
+    infoNotice.createSpan({
+      text: "Run 'darjeeling pair' on your companion server to generate a temporary 8-digit code (valid 5 minutes).",
     });
 
-    const tabContent = body.createDiv({ cls: "dj-tab-content" });
+    const fields = body.createDiv({ cls: "dj-pair-fields" });
 
-    const renderCodeForm = () => {
-      tabContent.empty();
-      codeTabBtn.addClass("is-active");
-      codeTabBtn.setAttribute("aria-selected", "true");
-      scanTabBtn.removeClass("is-active");
-      scanTabBtn.setAttribute("aria-selected", "false");
+    const urlRow = fields.createDiv({ cls: "dj-field-row" });
+    urlRow.createEl("label", { text: "Server URL (HTTP/HTTPS):" });
+    const urlInput = urlRow.createEl("input", {
+      type: "text",
+      cls: "dj-input",
+      placeholder: "http://100.x.y.z:8765 or https://host.ts.net",
+      value: this.pairUrl,
+    });
+    urlInput.addEventListener("input", () => {
+      this.pairUrl = urlInput.value.trim();
+    });
 
-      const fields = tabContent.createDiv({ cls: "dj-pair-fields" });
+    const codeRow = fields.createDiv({ cls: "dj-field-row" });
+    codeRow.createEl("label", { text: "8-digit pairing code:" });
+    const codeInput = codeRow.createEl("input", {
+      type: "text",
+      cls: "dj-input dj-pair-code-input",
+      placeholder: "1234 5678",
+      value: this.pairCode,
+      attr: { inputmode: "numeric", autocomplete: "one-time-code", maxlength: "12" },
+    });
+    codeInput.addEventListener("input", () => {
+      this.pairCode = codeInput.value.trim();
+    });
 
-      const urlRow = fields.createDiv({ cls: "dj-field-row" });
-      urlRow.createEl("label", { text: "Server URL (HTTP/HTTPS):" });
-      const urlInput = urlRow.createEl("input", {
-        type: "text",
-        cls: "dj-input",
-        placeholder: "http://100.x.y.z:8765 or https://host.ts.net",
-        value: this.pairUrl,
-      });
-      urlInput.addEventListener("input", () => {
-        this.pairUrl = urlInput.value.trim();
-      });
+    const errArea = body.createDiv({ cls: "dj-pair-error" });
 
-      const codeRow = fields.createDiv({ cls: "dj-field-row" });
-      codeRow.createEl("label", { text: "8-digit pairing code:" });
-      const codeInput = codeRow.createEl("input", {
-        type: "text",
-        cls: "dj-input dj-pair-code-input",
-        placeholder: "1234 5678",
-        value: this.pairCode,
-        attr: { inputmode: "numeric", autocomplete: "one-time-code", maxlength: "12" },
-      });
-      codeInput.addEventListener("input", () => {
-        this.pairCode = codeInput.value.trim();
-      });
+    const actions = this.containerEl.createDiv({ cls: "dj-onboarding-actions" });
+    const backBtn = actions.createEl("button", { cls: "dj-btn", text: "Back" });
+    backBtn.addEventListener("click", () => this.setStep("s1_server"));
 
-      const errArea = tabContent.createDiv({ cls: "dj-pair-error" });
-
-      const actions = this.containerEl.createDiv({ cls: "dj-onboarding-actions" });
-      const backBtn = actions.createEl("button", { cls: "dj-btn", text: "Back" });
-      backBtn.addEventListener("click", () => this.setStep("s1_server"));
-
-      const pairBtn = actions.createEl("button", {
-        cls: "dj-btn dj-btn-primary mod-cta",
-        text: "Pair device",
-      });
-      pairBtn.addEventListener("click", () => {
-        const val = validateServerUrl(this.pairUrl);
-        if (!val.ok || !val.url) {
-          errArea.setText(val.error || "Please enter a valid server URL.");
-          return;
-        }
-        if (!this.pairCode || this.pairCode.length < 6) {
-          errArea.setText("Please enter the 8-digit pairing code displayed on your server.");
-          return;
-        }
-        errArea.empty();
-        this.startPairing(val.url, this.pairCode);
-      });
-    };
-
-    const renderScanTab = () => {
-      tabContent.empty();
-      scanTabBtn.addClass("is-active");
-      scanTabBtn.setAttribute("aria-selected", "true");
-      codeTabBtn.removeClass("is-active");
-      codeTabBtn.setAttribute("aria-selected", "false");
-
-      const scanBox = tabContent.createDiv({ cls: "dj-scan-box" });
-      const camIcon = scanBox.createSpan({ cls: "dj-scan-icon" });
-      setIcon(camIcon, "camera");
-      scanBox.createEl("p", {
-        cls: "dj-scan-text",
-        text: "Point your camera at the QR code printed in your server terminal, or open the link directly on this device.",
-      });
-
-      const switchBtn = scanBox.createEl("button", {
-        cls: "dj-btn dj-btn-secondary",
-        text: "Enter code manually instead",
-      });
-      switchBtn.addEventListener("click", () => renderCodeForm());
-    };
-
-    codeTabBtn.addEventListener("click", renderCodeForm);
-    scanTabBtn.addEventListener("click", renderScanTab);
-
-    // Default to scan tab on mobile if available, otherwise code form
-    if (Platform.isMobile) {
-      renderScanTab();
-    } else {
-      renderCodeForm();
-    }
+    const pairBtn = actions.createEl("button", {
+      cls: "dj-btn dj-btn-primary mod-cta",
+      text: "Pair device",
+    });
+    pairBtn.addEventListener("click", () => {
+      const val = validateServerUrl(this.pairUrl);
+      if (!val.ok || !val.url) {
+        errArea.setText(val.error || "Please enter a valid server URL.");
+        return;
+      }
+      if (!this.pairCode || this.pairCode.length < 6) {
+        errArea.setText("Please enter the 8-digit pairing code displayed on your server.");
+        return;
+      }
+      errArea.empty();
+      this.startPairing(val.url, this.pairCode);
+    });
   }
 
   // S2b: Confirm Deep Link
@@ -487,21 +439,21 @@ export class DarjeelingOnboardingView {
     // Desktop only: "Pair your phone" (G-12)
     if (Platform.isDesktopApp) {
       const pairPhoneBox = body.createDiv({ cls: "dj-pair-phone-box" });
-      pairPhoneBox.createEl("h3", { text: "Pair your phone" });
+      pairPhoneBox.createEl("h3", { text: "Pair your phone or tablet" });
       pairPhoneBox.createEl("p", {
-        text: "Scan this QR code from your phone's camera to pair it with the same server.",
+        text: "Generate a temporary 8-digit code to pair Obsidian on your mobile device.",
       });
 
-      const qrContainer = pairPhoneBox.createDiv({ cls: "dj-qr-container" });
-      const getQrBtn = pairPhoneBox.createEl("button", {
+      const phoneContent = pairPhoneBox.createDiv({ cls: "dj-pair-code-display-box" });
+      const getCodeBtn = pairPhoneBox.createEl("button", {
         cls: "dj-btn dj-btn-secondary dj-btn-sm",
-        text: "Show phone QR code",
+        text: "Generate pairing code",
       });
 
-      getQrBtn.addEventListener("click", () => {
+      getCodeBtn.addEventListener("click", () => {
         void (async () => {
-          getQrBtn.disabled = true;
-          getQrBtn.setText("Generating code...");
+          getCodeBtn.disabled = true;
+          getCodeBtn.setText("Generating code...");
           try {
             const host =
               this.plugin.settings.hosts.find((h) => h.id === this.plugin.settings.activeHostId) ||
@@ -514,23 +466,44 @@ export class DarjeelingOnboardingView {
               token = this.plugin.settings.authToken || "";
             }
             if (!host || !token) {
-              throw new Error("No active host token found.");
+              throw new Error("No active host token found. Please ensure a companion host is configured.");
             }
             const codeRes = await requestPairCode(host.baseUrl, token);
-            const deepLink = `obsidian://darjeeling?action=pair&url=${encodeURIComponent(
-              host.baseUrl
-            )}&code=${encodeURIComponent(codeRes.code)}`;
-            if (typeof DOMParser !== "undefined") {
-              const qrSvg = new DOMParser().parseFromString(generateQrSvg(deepLink, 180), "image/svg+xml").documentElement;
-              if (qrSvg) qrContainer.appendChild(qrSvg);
-            }
-            const linkText = qrContainer.createDiv({ cls: "dj-deep-link-text" });
-            linkText.createEl("code", { text: codeRes.formatted_code });
-            getQrBtn.remove();
+            getCodeBtn.remove();
+            phoneContent.empty();
+
+            const codeCard = phoneContent.createDiv({ cls: "dj-code-card" });
+            codeCard.createEl("div", { cls: "dj-code-label", text: "8-digit pairing code (valid for 5 min):" });
+            codeCard.createEl("div", { cls: "dj-code-value", text: codeRes.formatted_code });
+            const copyCodeBtn = codeCard.createEl("button", {
+              cls: "dj-btn dj-btn-secondary dj-btn-sm",
+              text: "Copy code",
+            });
+            copyCodeBtn.addEventListener("click", () => {
+              void navigator.clipboard.writeText(codeRes.formatted_code);
+              new Notice("Pairing code copied to clipboard");
+            });
+
+            const urlCard = phoneContent.createDiv({ cls: "dj-url-card" });
+            urlCard.createEl("div", { cls: "dj-url-label", text: "Server URL:" });
+            urlCard.createEl("code", { text: host.baseUrl });
+            const copyUrlBtn = urlCard.createEl("button", {
+              cls: "dj-btn dj-btn-secondary dj-btn-sm",
+              text: "Copy URL",
+            });
+            copyUrlBtn.addEventListener("click", () => {
+              void navigator.clipboard.writeText(host.baseUrl);
+              new Notice("Server URL copied to clipboard");
+            });
+
+            const instructions = phoneContent.createEl("ol", { cls: "dj-phone-steps" });
+            instructions.createEl("li", { text: "Open Obsidian on your phone or tablet." });
+            instructions.createEl("li", { text: "Run command 'Darjeeling: Pair with server' (or Settings > Darjeeling > Connections)." });
+            instructions.createEl("li", { text: "Enter the Server URL and 8-digit Pairing Code above, then tap Pair Device." });
           } catch (err: unknown) {
-            getQrBtn.disabled = false;
-            getQrBtn.setText("Failed to generate QR");
-            new Notice(err instanceof Error ? err.message : "Failed to generate pairing QR");
+            getCodeBtn.disabled = false;
+            getCodeBtn.setText("Failed to generate code");
+            new Notice(err instanceof Error ? err.message : "Failed to generate pairing code");
           }
         })();
       });
