@@ -1,6 +1,7 @@
 import { Platform, Setting } from "obsidian";
 import type { DarjeelingSettingTab } from "../tab";
 import type { RuntimeMode } from "../schema";
+import { resolveDeviceRuntime, setDeviceRuntime } from "../../runtime/router";
 
 export function displayHostSelector(tab: DarjeelingSettingTab, containerEl: HTMLElement): void {
   new Setting(containerEl).setName("Connections").setHeading();
@@ -29,11 +30,16 @@ export function displayHostSelector(tab: DarjeelingSettingTab, containerEl: HTML
       drop
         .addOption("direct-api", "Direct provider API (DeepSeek / Gemini / Anthropic / Ollama)")
         .addOption("remote", "Remote Darjeeling server (tmux / WebSocket)")
-        .setValue(tab.plugin.settings.runtimeMode)
+        .setValue(resolveDeviceRuntime(tab.plugin.settings, tab.app))
         .onChange(async (val) => {
-          tab.plugin.settings.runtimeMode = val as RuntimeMode;
+          setDeviceRuntime(tab.app, tab.plugin.settings, val as RuntimeMode);
           await tab.plugin.saveSettings();
           tab.display();
+          for (const leaf of tab.app.workspace.getLeavesOfType("darjeeling-view")) {
+            const v = leaf.view as unknown as { updateRuntimeChip?(): void; updateModelChip?(): void };
+            v?.updateRuntimeChip?.();
+            v?.updateModelChip?.();
+          }
         });
     });
 }

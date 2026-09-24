@@ -11,6 +11,7 @@ import {
   sanitizeModelForHarness,
 } from "../../models/registry";
 import { detectLocalBinary } from "../../runtime/localAgentRunner";
+import { setDeviceRuntime } from "../../runtime/router";
 import { getTeaLeafBranchSvg } from "../illustrations";
 import { verifyHostAuthentication } from "../../net/pairing";
 import { openDarjeelingSettings } from "../../settings/openSettings";
@@ -773,7 +774,7 @@ export class DarjeelingNewSessionModal extends Modal {
     }
 
     // Persist explicitly so subsequent sessions retain the selected mode
-    this.plugin.settings.runtimeMode = this.selectedMode;
+    setDeviceRuntime(this.app, this.plugin.settings, this.selectedMode);
     this.plugin.settings.askHostOnNewSession = this.askHostOnNewSession;
     await this.plugin.saveSettings();
 

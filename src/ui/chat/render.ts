@@ -5,6 +5,7 @@ import type { DarjeelingChat } from "./chatView";
 import { exportConversationToMarkdown } from "./export";
 import type { ToolCallDetail } from "./toolSheet";
 import { openDarjeelingSettings } from "../../settings/openSettings";
+import { setDeviceRuntime } from "../../runtime/router";
 
 /**
  * Whitelist of safe programming languages for syntax highlighting.
@@ -267,7 +268,7 @@ export function renderEmptyState(chat: DarjeelingChat, messagesEl: HTMLElement):
     });
     directApiBtn.addEventListener("click", () => {
       void (async () => {
-        plugin.settings.runtimeMode = "direct-api";
+        setDeviceRuntime(plugin.app, plugin.settings, "direct-api");
         await plugin.saveSettings();
         renderEmptyState(chat, messagesEl);
       })();

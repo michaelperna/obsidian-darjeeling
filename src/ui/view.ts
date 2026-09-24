@@ -31,6 +31,7 @@ import {
   sanitizeModelForHarness,
   setModelForHarness,
 } from "../models/registry";
+import { setDeviceRuntime } from "../runtime/router";
 
 export const DARJEELING_VIEW_TYPE = "darjeeling-view";
 
@@ -360,7 +361,7 @@ export class DarjeelingView extends ItemView {
   }
 
   async applyHostSelection(target: SessionTarget): Promise<void> {
-    this.plugin.settings.runtimeMode = target.mode;
+    setDeviceRuntime(this.app, this.plugin.settings, target.mode);
     if (target.agent) this.plugin.settings.agent = target.agent;
     if (target.provider) this.plugin.settings.directApiProvider = target.provider;
     if (target.meshnetHost) this.plugin.settings.meshnetHost = target.meshnetHost;

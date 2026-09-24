@@ -293,9 +293,9 @@ export class DarjeelingChat extends Component {
 
   growInput(): void {
     if (!this.inputEl) return;
-    this.inputEl.setCssProps({ "--dj-input-height": "auto" });
+    this.inputEl.setCssProps?.({ "--dj-input-height": "auto" });
     const next = Math.min(Math.max(this.inputEl.scrollHeight, 40), 160);
-    this.inputEl.setCssProps({ "--dj-input-height": `${next}px` });
+    this.inputEl.setCssProps?.({ "--dj-input-height": `${next}px` });
   }
 
   public prefill(text: string): void {
@@ -496,6 +496,11 @@ export class DarjeelingChat extends Component {
     }
   }
 
+  public syncActiveEpoch(): void {
+    this.activeEpoch = this.conversationEpoch;
+    this.lastProcessedSeq = -1;
+  }
+
   async send(): Promise<void> {
     if (!this.inputEl) return;
     const text = this.inputEl.value.trim();
@@ -513,11 +518,11 @@ export class DarjeelingChat extends Component {
       return;
     }
 
-    await this.dispatcher.executeTurn(text);
+    await this.executeTurn(text);
   }
 
   async executeTurn(text: string): Promise<void> {
-    this.activeEpoch = this.conversationEpoch;
+    this.syncActiveEpoch();
     await this.dispatcher.executeTurn(text);
   }
 
@@ -550,7 +555,7 @@ export class DarjeelingChat extends Component {
 
   private bindClient(): void {
     const isFrameStale = (ev?: unknown) => {
-      if (this.activeEpoch !== this.conversationEpoch && this.conversationEpoch > 0) {
+      if (this.activeEpoch !== this.conversationEpoch) {
         return true;
       }
       if (ev && typeof ev === "object" && "dj_seq" in ev && typeof (ev).dj_seq === "number") {

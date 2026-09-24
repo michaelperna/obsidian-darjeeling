@@ -33,6 +33,9 @@ function makeDomElement(tag = "div"): any {
       el.children.length = 0;
       el.textContent = "";
     },
+    setCssProps(_props: Record<string, string>) {
+      return el;
+    },
     appendChild(child: any) {
       el.children.push(child);
       return child;
@@ -322,4 +325,55 @@ test("onResult safely handles NaN or malformed usage statistics without throwing
   const turn = chat.getActiveTurn();
   assert.notEqual(turn, null);
   assert.ok(turn!.text.includes("Result with weird numbers"));
+});
+
+test("send() syncs active epoch and accepts assistant text and result frames without thinking UI hang", async () => {
+  const { chat, getHandlers } = createTestHarness();
+
+  // New conversation increments conversationEpoch to 1 while activeEpoch starts at 0
+  chat.newConversation();
+
+  // User types into input and sends
+  (chat as any).inputEl.value = "Why is the grass green?";
+  await chat.send();
+
+  assert.equal(chat.isBusy(), true);
+
+  const handlers = getHandlers();
+  handlers.onAssistantText("Because of chlorophyll.", undefined);
+
+  const resultEvent: StreamResult = {
+    result: "Because of chlorophyll.",
+    is_error: false,
+    duration_ms: 1000,
+    usage: { input_tokens: 10, output_tokens: 10 },
+  };
+  handlers.onResult(resultEvent);
+
+  // Thinking indicator should be removed and turn finished
+  assert.equal(chat.isBusy(), false);
+  const activeTurn = chat.getActiveTurn();
+  assert.notEqual(activeTurn, null);
+  assert.ok(activeTurn!.text.includes("Because of chlorophyll."));
+});
+
+test("dispatcher.executeTurn() syncs active epoch even when invoked directly", async () => {
+  const { chat, getHandlers } = createTestHarness();
+
+  chat.newConversation();
+  await (chat as any).dispatcher.executeTurn("Direct invocation");
+
+  assert.equal(chat.isBusy(), true);
+
+  const handlers = getHandlers();
+  handlers.onAssistantText("Direct turn answered", undefined);
+  handlers.onResult({
+    result: "Direct turn answered",
+    is_error: false,
+  });
+
+  assert.equal(chat.isBusy(), false);
+  const activeTurn = chat.getActiveTurn();
+  assert.notEqual(activeTurn, null);
+  assert.ok(activeTurn!.text.includes("Direct turn answered"));
 });

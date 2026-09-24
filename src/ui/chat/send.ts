@@ -291,6 +291,7 @@ export class TurnDispatcher {
     overrideFile?: TFile | null,
     modeOverride?: string | null
   ): Promise<void> {
+    this.chat.syncActiveEpoch();
     this.isPreparing = true;
     this.abortPreparation = false;
 

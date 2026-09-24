@@ -1,5 +1,6 @@
 import { Notice, Platform, setIcon } from "obsidian";
 import type { DarjeelingChat } from "./chatView";
+import { setDeviceRuntime } from "../../runtime/router";
 
 interface AppWithSetting {
   setting?: {
@@ -93,7 +94,7 @@ export function showRemoteOfflineCard(chat: DarjeelingChat, originalText: string
       }
 
       wrap.remove();
-      plugin.settings.runtimeMode = "direct-api";
+      setDeviceRuntime(plugin.app, plugin.settings, "direct-api");
       await plugin.saveSettings();
       chat.getClient().updateSettings(plugin.settings);
       chat.getView()?.updateRuntimeChip();
@@ -127,7 +128,7 @@ export function showRemoteOfflineCard(chat: DarjeelingChat, originalText: string
     localBtn.addEventListener("click", () => {
       void (async () => {
         wrap.remove();
-        plugin.settings.runtimeMode = "local";
+        setDeviceRuntime(plugin.app, plugin.settings, "local");
         await plugin.saveSettings();
         chat.getClient().updateSettings(plugin.settings);
         chat.getView()?.updateRuntimeChip();
