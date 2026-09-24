@@ -111,7 +111,7 @@ export class DarjeelingView extends ItemView {
   public renderOnboarding(step?: OnboardingStep, url?: string, code?: string): void {
     const root = (this.containerEl.children[1] as HTMLElement) || this.containerEl;
     root.empty();
-    root.addClass("darjeeling-root");
+    root.addClass("darjeeling-root", "dj-view-root");
     new DarjeelingOnboardingView(
       root,
       this.plugin,
@@ -127,7 +127,7 @@ export class DarjeelingView extends ItemView {
   public async initViewContent(): Promise<void> {
     const root = (this.containerEl.children[1] as HTMLElement) || this.containerEl;
     root.empty();
-    root.addClass("darjeeling-root");
+    root.addClass("darjeeling-root", "dj-view-root");
 
     this.buildHeader(root);
     this.buildModelBar(root);

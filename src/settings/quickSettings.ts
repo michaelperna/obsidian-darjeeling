@@ -40,7 +40,7 @@ export class DarjeelingQuickSettingsModal extends Modal {
     });
     closeBtn.addEventListener("click", () => this.close());
 
-    const body = contentEl.createDiv({ cls: "dj-settings-modal-body" });
+    const body = contentEl.createDiv({ cls: "dj-settings-modal-body dj-settings-tab" });
     const tab = new DarjeelingSettingTab(this.app, this.plugin);
     tab.containerEl = body;
     tab.display();

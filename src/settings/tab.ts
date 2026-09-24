@@ -25,7 +25,7 @@ export class DarjeelingSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.addClass("darjeeling-root");
+    containerEl.addClass("darjeeling-root", "dj-settings-tab");
 
     // 1. Connections list
     displayHostSelector(this, containerEl);

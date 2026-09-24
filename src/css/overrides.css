@@ -601,7 +601,10 @@
   gap: 8px !important;
 }
 
-.dj-settings-modal-body {
+.dj-settings-modal-body,
+.dj-settings-tab,
+.vertical-tab-content.darjeeling-root {
+  display: block !important;
   flex: 1 1 auto !important;
   min-height: 0 !important;
   height: auto !important;
@@ -617,67 +620,114 @@
   box-sizing: border-box !important;
 }
 
-.dj-settings-modal-body * {
+.dj-settings-modal-body *,
+.dj-settings-tab * {
   box-sizing: border-box !important;
 }
 
 /* Ensure setting items wrap cleanly and never cause horizontal scroll */
-.dj-settings-modal-body .setting-item {
+.dj-settings-modal-body .setting-item,
+.dj-settings-tab .setting-item {
   border-top: 1px solid var(--dj-border, #1c291e) !important;
   padding: 12px 0 !important;
   display: flex !important;
   flex-direction: row !important;
-  flex-wrap: wrap !important;
+  flex-wrap: nowrap !important;
   align-items: center !important;
   justify-content: space-between !important;
-  gap: 12px !important;
+  gap: 16px !important;
   width: 100% !important;
   max-width: 100% !important;
-  overflow-x: hidden !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  flex-shrink: 0 !important;
 }
 
-.dj-settings-modal-body .setting-item-info {
-  flex: 1 1 220px !important;
+/* Section Headings */
+.dj-settings-modal-body .setting-item.setting-item-heading,
+.dj-settings-tab .setting-item.setting-item-heading {
+  border-top: none !important;
+  padding-top: 24px !important;
+  padding-bottom: 6px !important;
+  align-items: flex-end !important;
+}
+
+.dj-settings-modal-body .setting-item.setting-item-heading:first-child,
+.dj-settings-tab .setting-item.setting-item-heading:first-child {
+  padding-top: 4px !important;
+}
+
+.dj-settings-modal-body .setting-item.setting-item-heading .setting-item-name,
+.dj-settings-tab .setting-item.setting-item-heading .setting-item-name {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: var(--text-normal) !important;
+  letter-spacing: -0.01em !important;
+}
+
+.dj-settings-modal-body .setting-item-info,
+.dj-settings-tab .setting-item-info {
+  flex: 1 1 auto !important;
   min-width: 0 !important;
   max-width: 100% !important;
   word-break: break-word !important;
   overflow-wrap: break-word !important;
+  overflow: visible !important;
 }
 
-.dj-settings-modal-body .setting-item-name {
+.dj-settings-modal-body .setting-item-name,
+.dj-settings-tab .setting-item-name {
   font-weight: 500 !important;
   font-size: 13.5px !important;
+  line-height: 1.4 !important;
   color: var(--text-normal) !important;
 }
 
-.dj-settings-modal-body .setting-item-description {
+.dj-settings-modal-body .setting-item-description,
+.dj-settings-tab .setting-item-description {
   color: var(--text-muted) !important;
   font-size: 12px !important;
   line-height: 1.45 !important;
   word-break: break-word !important;
+  margin-top: 3px !important;
 }
 
-.dj-settings-modal-body .setting-item-control {
-  flex: 1 1 220px !important;
+.dj-settings-modal-body .setting-item-control,
+.dj-settings-tab .setting-item-control {
+  flex: 0 0 auto !important;
   display: flex !important;
   align-items: center !important;
   justify-content: flex-end !important;
   gap: 8px !important;
-  flex-wrap: wrap !important;
+  flex-wrap: nowrap !important;
   min-width: 0 !important;
-  max-width: 100% !important;
+  max-width: 60% !important;
+  overflow: visible !important;
 }
 
 .dj-settings-modal-body input[type="text"],
 .dj-settings-modal-body input[type="password"],
-.dj-settings-modal-body input[type="number"] {
-  max-width: min(100%, 340px) !important;
+.dj-settings-modal-body input[type="number"],
+.dj-settings-tab input[type="text"],
+.dj-settings-tab input[type="password"],
+.dj-settings-tab input[type="number"] {
+  max-width: min(100%, 320px) !important;
   min-width: 0 !important;
   box-sizing: border-box !important;
 }
 
-.dj-settings-modal-body select {
-  max-width: min(100%, 340px) !important;
+.dj-settings-modal-body textarea,
+.dj-settings-tab textarea {
+  max-width: min(100%, 380px) !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.dj-settings-modal-body select,
+.dj-settings-tab select {
+  max-width: min(100%, 320px) !important;
   min-width: 0 !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
@@ -685,7 +735,8 @@
   box-sizing: border-box !important;
 }
 
-.dj-settings-modal-body .dj-diag {
+.dj-settings-modal-body .dj-diag,
+.dj-settings-tab .dj-diag {
   max-width: 100% !important;
   width: 100% !important;
   overflow-x: auto !important;
@@ -694,7 +745,8 @@
   box-sizing: border-box !important;
 }
 
-.dj-settings-modal-body .dj-settings-banner {
+.dj-settings-modal-body .dj-settings-banner,
+.dj-settings-tab .dj-settings-banner {
   max-width: 100% !important;
   width: 100% !important;
   box-sizing: border-box !important;
@@ -735,18 +787,26 @@
     max-height: calc(100vh - 40px) !important;
     border-radius: 12px !important;
   }
-  .dj-settings-modal-body .setting-item {
+  .dj-settings-modal-body .setting-item:not(.setting-item-heading),
+  .dj-settings-tab .setting-item:not(.setting-item-heading) {
     flex-direction: column !important;
     align-items: flex-start !important;
+    gap: 8px !important;
   }
-  .dj-settings-modal-body .setting-item-control {
+  .dj-settings-modal-body .setting-item:not(.setting-item-heading) .setting-item-control,
+  .dj-settings-tab .setting-item:not(.setting-item-heading) .setting-item-control {
     width: 100% !important;
+    max-width: 100% !important;
     justify-content: flex-start !important;
   }
   .dj-settings-modal-body select,
   .dj-settings-modal-body input[type="text"],
   .dj-settings-modal-body input[type="password"],
-  .dj-settings-modal-body input[type="number"] {
+  .dj-settings-modal-body input[type="number"],
+  .dj-settings-tab select,
+  .dj-settings-tab input[type="text"],
+  .dj-settings-tab input[type="password"],
+  .dj-settings-tab input[type="number"] {
     max-width: 100% !important;
     width: 100% !important;
   }

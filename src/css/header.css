@@ -3,12 +3,6 @@
    ========================================================================== */
 
 .darjeeling-root {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
   position: relative;
   isolation: isolate;
   background-color: var(--dj-bg);
@@ -16,6 +10,18 @@
   font-family: var(--dj-font-ui);
   font-size: 13px;
   line-height: 1.55;
+}
+
+/* View shell (Obsidian workspace leaf) */
+.workspace-leaf-content[data-type="darjeeling-view"] .view-content.darjeeling-root,
+.darjeeling-root.dj-view-root,
+.darjeeling-root:not(.dj-settings-modal-body):not(.dj-settings-tab):not(.vertical-tab-content):not(.dj-settings-modal-content) {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 
   /* Query the panel, not the window — see the note on the narrow rules below. */
   container-type: inline-size;
