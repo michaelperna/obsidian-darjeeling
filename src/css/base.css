@@ -146,11 +146,11 @@
 
 @container darjeeling (max-width: 520px) {
   .dj-composer-quick-chips {
-    display: none !important;
+    display: none;
   }
 
   .dj-quick-menu-btn {
-    display: inline-flex !important;
+    display: inline-flex;
   }
 
   .dj-composer-island {
@@ -241,21 +241,21 @@
 }
 
 .is-mobile .dj-composer-island {
-  margin-bottom: calc(max(var(--mobile-navbar-height, 0px), var(--mobile-toolbar-height, 0px), 48px) + 6px) !important;
+  margin-bottom: calc(max(var(--mobile-navbar-height, 0px), var(--mobile-toolbar-height, 0px), 48px) + 6px);
 }
 
 .is-mobile .darjeeling-root .dj-composer-island:focus-within {
-  margin-bottom: calc(max(var(--mobile-navbar-height, 0px), var(--mobile-toolbar-height, 0px), 48px) + 2px) !important;
+  margin-bottom: calc(max(var(--mobile-navbar-height, 0px), var(--mobile-toolbar-height, 0px), 48px) + 2px);
 }
 
 .is-mobile .darjeeling-root .dj-composer-quick-chips,
 .is-mobile .dj-composer-quick-chips {
-  display: none !important;
+  display: none;
 }
 
 .is-mobile .darjeeling-root .dj-quick-menu-btn,
 .is-mobile .dj-quick-menu-btn {
-  display: inline-flex !important;
+  display: inline-flex;
 }
 
 /* ================= Global Baseline: Touch Ergonomics (DM-06) ================= */
@@ -306,11 +306,11 @@
   }
 
   .darjeeling-root .dj-composer-quick-chips {
-    display: none !important;
+    display: none;
   }
 
   .darjeeling-root .dj-quick-menu-btn {
-    display: inline-flex !important;
+    display: inline-flex;
     min-height: 36px;
     padding: 6px 12px;
   }

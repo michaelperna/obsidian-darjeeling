@@ -400,6 +400,34 @@ body.theme-light .dj-quick-menu-btn:active {
   color: var(--text-normal, #2c3327);
 }
 
+@container darjeeling (max-width: 520px) {
+  .dj-composer-quick-chips {
+    display: none !important;
+  }
+  .dj-quick-menu-btn {
+    display: inline-flex !important;
+  }
+}
+
+.is-mobile .dj-composer-quick-chips,
+.is-mobile .darjeeling-root .dj-composer-quick-chips {
+  display: none !important;
+}
+
+.is-mobile .dj-quick-menu-btn,
+.is-mobile .darjeeling-root .dj-quick-menu-btn {
+  display: inline-flex !important;
+}
+
+@media (pointer: coarse) {
+  .darjeeling-root .dj-composer-quick-chips {
+    display: none !important;
+  }
+  .darjeeling-root .dj-quick-menu-btn {
+    display: inline-flex !important;
+  }
+}
+
 .dj-send-circle-btn {
   display: inline-flex;
   align-items: center;
