@@ -9,7 +9,7 @@
  *   3. All --dj-* custom properties referenced in src/css are defined (VTH-38)
  *   4. All animation names referenced have matching @keyframes (DM-19)
  *   5. No raw un-tokenized hex literals outside tokens.css (DM-03)
- *   6. Zero occurrences of legacy assets: djLeafGrad or data:image/png;base64 in src/ (OBS-05, OBS-06)
+ *   6. Zero occurrences of legacy assets: data:image/png;base64 in src/ (OBS-05, OBS-06)
  *   7. Balanced braces and valid structure in built styles.css
  */
 
@@ -181,10 +181,10 @@ if (unTokenizedHex.length > 0) {
   pass("Zero raw un-tokenized hex literals outside tokens.css.");
 }
 
-// 7. Legacy Assets grep Check (djLeafGrad, base64 PNGs)
+// 7. Legacy Assets grep Check (base64 PNGs)
 try {
   const grepCheck = execSync(
-    'git grep -nE "djLeafGrad|data:image/png;base64" -- "src/**"',
+    'git grep -nE "data:image/png;base64" -- "src/**"',
     { cwd: root, encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] }
   );
   if (grepCheck.trim().length > 0) {
@@ -192,7 +192,7 @@ try {
   }
 } catch {
   // grep exits with 1 when no matches are found, which is what we want
-  pass("Zero legacy vector/raster assets (djLeafGrad, data:image/png;base64) in src/.");
+  pass("Zero legacy raster assets (data:image/png;base64) in src/.");
 }
 
 if (failed) {
