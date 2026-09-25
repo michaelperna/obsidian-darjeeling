@@ -86,17 +86,17 @@ def test_wildcard_rewritten_to_single_overlay_with_yes(tmp_path):
 
 def test_legacy_host_key_rewritten_and_removed(tmp_path):
     env = env_file(tmp_path, "DARJEELING_HOST=::\nDARJEELING_PORT=8765\n")
-    res = check(tmp_path, env, overlays=["100.64.1.1"])
+    res = check(tmp_path, env, overlays=["100.64.0.11"])
     assert res.returncode == 0, res.stderr
     text = env.read_text()
     assert "DARJEELING_HOST" not in text
-    assert "DARJEELING_BIND=100.64.1.1" in text
+    assert "DARJEELING_BIND=100.64.0.11" in text
     assert "DARJEELING_PORT=8765" in text
 
 
 def test_explicit_bind_wins(tmp_path):
     env = env_file(tmp_path, "DARJEELING_BIND=0.0.0.0\n")
-    res = check(tmp_path, env, bind="192.168.1.20", overlays=["100.64.1.1", "100.64.1.2"])
+    res = check(tmp_path, env, bind="192.168.1.20", overlays=["100.64.0.11", "100.64.0.12"])
     assert res.returncode == 0, res.stderr
     assert env.read_text() == "DARJEELING_BIND=192.168.1.20\n"
 
@@ -108,7 +108,7 @@ def test_explicit_network_loopback(tmp_path):
     assert env.read_text() == "DARJEELING_BIND=127.0.0.1\n"
 
 
-@pytest.mark.parametrize("overlays", [(), ("100.64.1.1", "100.64.1.2")])
+@pytest.mark.parametrize("overlays", [(), ("100.64.0.11", "100.64.0.12")])
 def test_stops_with_choices_when_ambiguous(tmp_path, overlays):
     env = env_file(tmp_path, "DARJEELING_BIND=0.0.0.0\n")
     res = check(tmp_path, env, overlays=overlays)
