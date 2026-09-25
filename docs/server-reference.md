@@ -10,7 +10,7 @@ The server configuration file is `/etc/darjeeling/darjeeling.env` (`root:darjeel
 
 | Variable | Type | Default | Description |
 |---|---|---|---|
-| `DARJEELING_BIND` | string | `127.0.0.1` | Listen address: `loopback`, an IP, `address:<ip>` or `interface:<name>`. Non-private addresses are refused unless `DARJEELING_ALLOW_PUBLIC_BIND=1`. `DARJEELING_HOST` is an alias. |
+| `DARJEELING_BIND` | string | `127.0.0.1` | Listen address: `loopback`, an IP, `address:<ip>` or `interface:<name>`. Non-private addresses are refused unless `DARJEELING_ALLOW_PUBLIC_BIND=1`; `0.0.0.0`, `::` and link-local addresses are refused at startup since 1.0.4. `DARJEELING_HOST` is an alias. |
 | `DARJEELING_PORT` | integer | `8765` | TCP port for HTTP REST and WebSocket connections. |
 | `DARJEELING_STATE_DIR` | string | `/var/lib/darjeeling` | Token, paired devices, pairing codes, secrets and runtime files. |
 | `DARJEELING_TOKEN_FILE` | string | `/var/lib/darjeeling/.token` | Host authentication token file (mode `0600`). The installer writes a 256-bit token (64 hex characters). |
