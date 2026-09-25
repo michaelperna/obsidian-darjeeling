@@ -3,6 +3,7 @@ import type DarjeelingPlugin from "../../main";
 import { getTeaLeafBranchSvg } from "../illustrations";
 import { pairDevice, requestPairCode, validateServerUrl, type PairDeviceResult } from "../../net/pairing";
 import type { HostConfig } from "../../settings/schema";
+import { hostSecretId, pairingHostId } from "../../settings/secrets";
 
 export type OnboardingStep =
   | "s0_welcome"
@@ -596,20 +597,27 @@ export class DarjeelingOnboardingView {
         this.render();
 
         // 3. Save host & device secret
+        const hostId = pairingHostId(
+          this.plugin.settings,
+          url,
+          res.deviceId || `host-${Date.now()}`
+        );
         let tokenSecretId = "";
         try {
           tokenSecretId = await this.plugin.secretStorage.storeSecretWithVerification(
             res.token,
-            "dj_host"
+            "dj_host",
+            hostSecretId(hostId)
           );
         } catch {
-          const id = this.plugin.secretStorage.generateSecretId("dj_host");
+          const id = hostSecretId(hostId);
           await this.plugin.secretStorage.setSecret(id, res.token);
           tokenSecretId = id;
         }
 
         const newHost: HostConfig = {
-          id: res.deviceId || `host-${Date.now()}`,
+          ...this.plugin.settings.hosts?.find((h) => h.id === hostId),
+          id: hostId,
           name: res.serverName || "Darjeeling Host",
           baseUrl: url,
           tokenSecretId,

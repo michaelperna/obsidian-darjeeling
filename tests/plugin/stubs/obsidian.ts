@@ -333,13 +333,50 @@ export class PluginSettingTab {
   hide(): void {}
 }
 
+/**
+ * Every component a Setting built, newest last, so a test can drive a text
+ * field: `c.fire("change", value)` runs its onChange handler and
+ * `c.inputEl.dispatch("blur")` runs its DOM listeners. Reset with
+ * resetSettingComponents().
+ */
+export const settingComponents: any[] = [];
+/** Text of every note a Setting added under its description (createDiv / createEl). */
+export const settingNotes: string[] = [];
+
+export function resetSettingComponents(): void {
+  settingComponents.length = 0;
+  settingNotes.length = 0;
+}
+
+function noteEl(): any {
+  const el: any = {
+    createDiv: (o?: { text?: string }) => {
+      if (o?.text) settingNotes.push(o.text);
+      return noteEl();
+    },
+    createEl: (_tag: string, o?: { text?: string }) => {
+      if (o?.text) settingNotes.push(o.text);
+      return noteEl();
+    },
+    createSpan: (o?: { text?: string }) => {
+      if (o?.text) settingNotes.push(o.text);
+      return noteEl();
+    },
+    empty: () => {},
+    remove: () => {},
+    addClass: () => {},
+    setText: () => {},
+  };
+  return el;
+}
+
 /** Chainable, inert. Component callbacks receive a chainable stand-in. */
 export class Setting {
-  settingEl: any = {};
-  infoEl: any = {};
-  nameEl: any = {};
-  descEl: any = {};
-  controlEl: any = {};
+  settingEl: any = noteEl();
+  infoEl: any = noteEl();
+  nameEl: any = noteEl();
+  descEl: any = noteEl();
+  controlEl: any = noteEl();
   constructor(_containerEl: unknown) {}
   setName(_name: unknown): this {
     return this;
@@ -378,13 +415,44 @@ export class Setting {
     return this.add(build);
   }
   private add(build: (c: any) => unknown): this {
-    build(chainable());
+    const c = chainable();
+    settingComponents.push(c);
+    build(c);
     return this;
   }
 }
 
+function fakeInputEl(): any {
+  const listeners = new Map<string, Array<() => unknown>>();
+  return {
+    addClass: () => {},
+    addEventListener: (type: string, fn: () => unknown) => {
+      listeners.set(type, [...(listeners.get(type) ?? []), fn]);
+    },
+    dispatch: (type: string) => {
+      for (const fn of listeners.get(type) ?? []) fn();
+    },
+  };
+}
+
 function chainable(): any {
-  const target: any = { inputEl: {}, selectEl: {}, buttonEl: {}, toggleEl: {} };
+  const handlers: Record<string, (value: any) => unknown> = {};
+  const target: any = {
+    inputEl: fakeInputEl(),
+    selectEl: {},
+    buttonEl: {},
+    toggleEl: {},
+    /** Run the handler registered with onChange / onClick. */
+    fire: (event: string, value?: unknown) => handlers[event]?.(value),
+  };
+  target.onChange = (fn: (value: any) => unknown) => {
+    handlers.change = fn;
+    return proxy;
+  };
+  target.onClick = (fn: (value: any) => unknown) => {
+    handlers.click = fn;
+    return proxy;
+  };
   const proxy: any = new Proxy(target, {
     get(obj, key) {
       if (key in obj) return obj[key];

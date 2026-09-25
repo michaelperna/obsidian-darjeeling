@@ -6,6 +6,7 @@ import {
   verifyHostAuthentication,
 } from "../../net/pairing";
 import { HostConfig } from "../../settings/schema";
+import { hostSecretId, pairingHostId } from "../../settings/secrets";
 
 export interface PairModalInitialData {
   url?: string;
@@ -152,19 +153,6 @@ export class DarjeelingPairModal extends Modal {
 
         progress.setText("Verifying device token...");
 
-        // Store token in SecretStorage
-        let tokenSecretId = "";
-        try {
-          tokenSecretId = await this.plugin.secretStorage.storeSecretWithVerification(
-            pairResult.token,
-            "dj_host"
-          );
-        } catch {
-          const id = this.plugin.secretStorage.generateSecretId("dj_host");
-          await this.plugin.secretStorage.setSecret(id, pairResult.token);
-          tokenSecretId = id;
-        }
-
         // Authenticated check against /api/agents (F-17)
         const authCheck = await verifyHostAuthentication(validation.url, pairResult.token);
         if (!authCheck.ok) {
@@ -178,9 +166,25 @@ export class DarjeelingPairModal extends Modal {
           return;
         }
 
+        // Store token in SecretStorage (only once the server accepted it, so a
+        // rejected token never overwrites a working one for a re-paired host)
+        const hostId = pairingHostId(this.plugin.settings, validation.url, `host_${Date.now()}`);
+        let tokenSecretId = "";
+        try {
+          tokenSecretId = await this.plugin.secretStorage.storeSecretWithVerification(
+            pairResult.token,
+            "dj_host",
+            hostSecretId(hostId)
+          );
+        } catch {
+          const id = hostSecretId(hostId);
+          await this.plugin.secretStorage.setSecret(id, pairResult.token);
+          tokenSecretId = id;
+        }
+
         // Create host entry via addHost (G-10)
-        const hostId = `host_${Date.now()}`;
         const newHost: HostConfig = {
+          ...this.plugin.settings.hosts?.find((h) => h.id === hostId),
           id: hostId,
           name: pairResult.serverName || "Darjeeling Host",
           baseUrl: validation.url,

@@ -8,8 +8,10 @@ import {
   type TerminalProfile,
 } from "./schema";
 import {
+  DEFAULT_TOKEN_SECRET_ID,
   PLAINTEXT_SECRET_FIELDS,
-  activeTokenSecretId,
+  hostSecretId,
+  providerSecretId,
   providerSecretSlot,
   type ProviderSecretSlot,
   type RetainedPlaintext,
@@ -31,40 +33,29 @@ export interface MigrationResult {
  * Enforces the 5 sync safety rules.
  */
 /**
- * Store `value` under `id` (or a fresh id) and read it back.
+ * Store `value` under the deterministic `id` and read it back.
  * Returns the id and whether the value is durably stored. A value that only
  * made it into the in-memory fallback is NOT durable: the caller must keep
  * its plaintext source (copy -> verify -> delete, Sync Rule 3).
+ *
+ * Ids are deterministic (providerSecretId / hostSecretId) so a second device
+ * migrating the same data.json independently picks the same id.
  */
 async function storeVerified(
   secrets: SecretStorage,
   id: string,
-  value: string,
-  prefix: string
+  value: string
 ): Promise<{ id: string; durable: boolean }> {
-  let secretId = id;
   let verified = false;
-  if (secretId) {
-    try {
-      await secrets.setSecret(secretId, value);
-      verified = (await secrets.getSecret(secretId)) === value;
-    } catch {
-      verified = false;
-    }
-  } else {
-    secretId = await secrets.storeSecretWithVerification(value, prefix);
-    verified = (await secrets.getSecret(secretId)) === value;
+  try {
+    await secrets.setSecret(id, value);
+    verified = (await secrets.getSecret(id)) === value;
+  } catch {
+    verified = false;
   }
-  secrets.remember(secretId, value);
-  return { id: secretId, durable: verified && secrets.isDurable(secretId) };
+  secrets.remember(id, value);
+  return { id, durable: verified && secrets.isDurable(id) };
 }
-
-const SLOT_PREFIX: Record<ProviderSecretSlot, string> = {
-  gemini: "dj_gemini",
-  anthropic: "dj_anthropic",
-  deepseek: "dj_deepseek",
-  openaiCompatible: "dj_openai",
-};
 
 const SLOT_FIELD: Record<ProviderSecretSlot, (typeof PLAINTEXT_SECRET_FIELDS)[number]> = {
   gemini: "geminiApiKey",
@@ -106,7 +97,7 @@ async function moveProviderKeys(
     const value = str(field);
     if (!value) continue;
     const cfg = target.providers[slot];
-    const res = await storeVerified(secrets, cfg.apiKeySecretId, value, SLOT_PREFIX[slot]);
+    const res = await storeVerified(secrets, providerSecretId(slot), value);
     cfg.apiKeySecretId = res.id;
     // Retain under the slot's own field so a later (v1) load maps it back
     // to the same provider.
@@ -132,14 +123,14 @@ async function moveV1Secrets(
 ): Promise<void> {
   await moveProviderKeys(stored, target, secrets, retained, false);
 
-  for (const [list, prefix, bucket] of [
-    [target.hosts ?? [], "dj_host", retained?.hosts],
-    [target.remoteHosts ?? [], "dj_token", retained?.remoteHosts],
+  for (const [list, bucket] of [
+    [target.hosts ?? [], retained?.hosts],
+    [target.remoteHosts ?? [], retained?.remoteHosts],
   ] as const) {
     for (const h of list as Array<HostConfig | RemoteHostConfig>) {
       const tok = typeof h.authToken === "string" ? h.authToken.trim() : "";
       if (!tok) continue;
-      const res = await storeVerified(secrets, h.tokenSecretId || "", tok, prefix);
+      const res = await storeVerified(secrets, hostSecretId(h.id), tok);
       h.tokenSecretId = res.id;
       if (!res.durable && bucket) bucket[h.id] = tok;
     }
@@ -150,14 +141,19 @@ async function moveV1Secrets(
     (typeof stored.token === "string" && stored.token.trim()) ||
     "";
   if (topToken) {
-    const activeHost = target.hosts?.find((h) => h.id === target.activeHostId);
+    // The legacy top-level token belongs to the active host (hosts first,
+    // then legacy remoteHosts), or to the host-less default slot.
+    const owner: HostConfig | RemoteHostConfig | undefined =
+      target.hosts?.find((h) => h.id === target.activeHostId) ??
+      target.remoteHosts?.find(
+        (h) => h.id === (target.activeRemoteHostId || target.activeHostId)
+      );
     const res = await storeVerified(
       secrets,
-      activeHost?.tokenSecretId || activeTokenSecretId(target),
-      topToken,
-      "dj_token"
+      owner ? hostSecretId(owner.id) : DEFAULT_TOKEN_SECRET_ID,
+      topToken
     );
-    if (activeHost && !activeHost.tokenSecretId) activeHost.tokenSecretId = res.id;
+    if (owner) owner.tokenSecretId = res.id;
     if (!res.durable && retained) retained.top.authToken = topToken;
   }
 
@@ -216,7 +212,12 @@ export async function migrateSettings(
   // 1. Move secrets with Copy -> Verify -> Delete (Sync Rule 3)
   let tokenSecretId = base.hosts[0]?.tokenSecretId || "";
   if (rawAuthToken && secrets) {
-    const res = await storeVerified(secrets, "", rawAuthToken, "dj_token");
+    // With a host address the token belongs to the "primary" host built below.
+    const res = await storeVerified(
+      secrets,
+      meshnetHost ? hostSecretId("primary") : DEFAULT_TOKEN_SECRET_ID,
+      rawAuthToken
+    );
     tokenSecretId = res.id;
     if (!res.durable && retained) retained.top.authToken = rawAuthToken;
   }
@@ -271,7 +272,7 @@ export async function migrateSettings(
     for (const rh of stored.remoteHosts as RemoteHostConfig[]) {
       let rhTokenId = rh.tokenSecretId || "";
       if (rh.authToken && secrets) {
-        const res = await storeVerified(secrets, rhTokenId, rh.authToken, "dj_token");
+        const res = await storeVerified(secrets, hostSecretId(rh.id || "remote-host"), rh.authToken);
         rhTokenId = res.id;
         if (!res.durable && retained) retained.remoteHosts[rh.id || "remote-host"] = rh.authToken;
       }

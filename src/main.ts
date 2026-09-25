@@ -1,5 +1,6 @@
 import {
   FileSystemAdapter,
+  Notice,
   Platform,
   Plugin,
   type TFile,
@@ -17,14 +18,19 @@ import {
 } from "./settings/schema";
 import { migrateSettings } from "./settings/migrate";
 import {
+  MISSING_SECRET_MESSAGE,
   SecretStorage,
   activeTokenSecretId,
   containsPlaintextSecrets,
   emptyRetained,
+  findMissingSecrets,
   hasRetained,
+  resolveSecretIds,
   serializeSettings,
+  type MissingSecret,
   type RetainedPlaintext,
 } from "./settings/secrets";
+import { loadDeviceSettings, saveDeviceSettings } from "./settings/device";
 import { DarjeelingSettingTab } from "./settings/tab";
 import { VaultHarness } from "./vault/harness";
 import { SessionManager } from "./net/sessionManager";
@@ -383,11 +389,40 @@ export default class DarjeelingPlugin extends Plugin {
       this.settings,
       this.retainedPlaintext
     );
+    // Old random secret ids -> deterministic ids, so devices sharing this
+    // data.json agree on where each secret lives.
+    const idsChanged =
+      !this.settings._readOnly && (await resolveSecretIds(this.secretStorage, this.settings));
     await this.secretStorage.prime(this.settings);
     // Copy -> verify -> delete: once secrets are verified in secret storage,
     // rewrite data.json without the plaintext copies.
-    if (containsPlaintextSecrets(stored) && !this.settings._readOnly) {
+    if ((containsPlaintextSecrets(stored) || idsChanged) && !this.settings._readOnly) {
       await this.saveData(serializeSettings(this.settings, this.retainedPlaintext));
+    }
+    this.notifyMissingSecrets();
+  }
+
+  /**
+   * Hosts / providers configured in synced settings whose secret is absent
+   * on this device (another device migrated data.json, which no longer
+   * carries plaintext secrets).
+   */
+  missingSecrets(): MissingSecret[] {
+    return findMissingSecrets(this.secretStorage, this.settings);
+  }
+
+  /** One Notice per device for each newly missing secret (remembered locally). */
+  private notifyMissingSecrets(): void {
+    const missing = this.missingSecrets();
+    const ids = missing.map((m) => `${m.kind}:${m.ref}`).sort();
+    const device = loadDeviceSettings(this.app);
+    const seen = new Set(device.missingSecretsNotified ?? []);
+    if (missing.length && ids.some((id) => !seen.has(id))) {
+      const labels = missing.map((m) => m.label).join(", ");
+      new Notice(`Darjeeling: ${MISSING_SECRET_MESSAGE} Missing here: ${labels}.`, 15000);
+    }
+    if (ids.join("|") !== [...seen].sort().join("|")) {
+      saveDeviceSettings(this.app, { ...device, missingSecretsNotified: ids });
     }
   }
 

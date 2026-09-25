@@ -9,6 +9,8 @@ export interface DeviceSettings {
   lastSyncedHashes?: Record<string, string>;
   modelListCache?: Record<string, unknown>;
   activeHostId?: string;
+  /** `kind:ref` of missing secrets this device was already told about. */
+  missingSecretsNotified?: string[];
 }
 
 interface AppWithLocalStorage {
