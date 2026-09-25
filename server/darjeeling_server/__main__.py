@@ -18,7 +18,13 @@ from darjeeling_server.config import (
 
 
 def main() -> None:
-    host = default_bind()
+    try:
+        host = default_bind()
+    except RuntimeError as err:
+        # Print the fix, not a traceback: this is what shows up in
+        # `journalctl -u darjeeling.service` after an upgrade.
+        log.error("Cannot start: %s", err)
+        raise SystemExit(2)
     port = int(os.environ.get("DARJEELING_PORT", "8765"))
 
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
