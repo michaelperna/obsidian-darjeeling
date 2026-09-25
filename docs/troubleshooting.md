@@ -26,7 +26,10 @@ Restart the service if needed:
 sudo systemctl restart darjeeling.service
 ```
 
-### Check 3: Firewall Configuration
+### Check 3: Refused Bind Address After Upgrading
+If the log shows `Cannot start: Refusing to bind to '0.0.0.0'` (or `::`), the env file still has a bind that 1.0.3 allowed and 1.0.4 refuses. Set `DARJEELING_BIND=interface:tailscale0`, `interface:nordlynx`, `address:<ip>` or `loopback` in `/etc/darjeeling/darjeeling.env`, then restart the service. See [Hosts bound to 0.0.0.0](install-server.md#hosts-bound-to-0000-or-).
+
+### Check 4: Firewall Configuration
 If you use `ufw` on your Linux server, ensure incoming traffic on port `8765` is allowed over your overlay network interface:
 ```bash
 sudo ufw allow in on tailscale0 to any port 8765
@@ -39,7 +42,7 @@ sudo ufw allow in on tailscale0 to any port 8765
 **Symptoms:** Connection fails with `Token rejected` or WebSocket close code `4401`.
 
 ### Resolution: Re-pair the Device
-The device token is invalid, expired, or was revoked on the server.
+The device token is invalid, expired, or was revoked on the server. If every client stopped working right after an upgrade, check the server log for `Auth: cannot read /var/lib/darjeeling/devices.json`: an unreadable device list refuses all tokens until its ownership and mode are fixed (`darjeeling:darjeeling`, `0600`).
 1. On your server, generate a fresh pairing code:
 ```bash
 darjeeling pair

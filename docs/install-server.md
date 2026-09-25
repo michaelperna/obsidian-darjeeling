@@ -160,25 +160,54 @@ sudo darjeeling config set permission-ceiling bypassPermissions
 sudo systemctl restart darjeeling.service
 ```
 
-Installs migrated by 1.0.3 or earlier from the legacy 4.1.0 layout were forced to `bypassPermissions`. 1.0.4 keeps an explicit value, so check yours with `sudo darjeeling config get permission-ceiling`.
+Installs migrated by 1.0.3 or earlier from the legacy 4.1.0 layout were forced to `bypassPermissions`, and 1.0.3's example config also defaulted to it. 1.0.4 keeps an existing value and warns when it is `bypassPermissions`, so check yours with `sudo darjeeling config get permission-ceiling`.
 
 ---
 
 ## 7. Upgrades, Rollbacks & Virtual Environment Repair
 
 ### Upgrading the Server
-Download the new release's tarball and `SHA256SUMS`, verify, then upgrade:
+Always upgrade with the **new** release's `install.sh`. Download it together with the tarball and `SHA256SUMS`, verify, then run it:
 
 ```bash
 VER=1.0.4
 BASE="https://github.com/michaelperna/obsidian-darjeeling/releases/download/${VER}"
-curl -fsSL -O "${BASE}/darjeeling-server-${VER}.tar.gz" -O "${BASE}/SHA256SUMS"
+mkdir -p ~/darjeeling-upgrade && cd ~/darjeeling-upgrade
+curl -fsSL -O "${BASE}/install.sh" -O "${BASE}/darjeeling-server-${VER}.tar.gz" -O "${BASE}/SHA256SUMS"
 sha256sum --ignore-missing -c SHA256SUMS
-sudo darjeeling upgrade --tarball "darjeeling-server-${VER}.tar.gz"
+sudo bash install.sh --tarball "darjeeling-server-${VER}.tar.gz" --yes
 ```
+
+`sha256sum` must print `OK` for both files. The upgrade keeps the host token, `devices.json` (paired devices), `/etc/darjeeling/darjeeling.env` and an explicitly set permission ceiling. The release being replaced stays in `/opt/darjeeling/releases/` and is recorded as `/opt/darjeeling/previous`.
+
+> **Upgrading from 1.0.3:** do not run `sudo darjeeling upgrade` on a 1.0.3 host. The 1.0.3 CLI runs the old installer from `/opt/darjeeling/current`, which is hard-coded to version `1.0.0-dev` and forces `bypassPermissions` on hosts migrated from 4.1.0. Use the commands above.
+
+On 1.0.4 and later, `sudo darjeeling upgrade --tarball "darjeeling-server-${VER}.tar.gz"` does the same thing: it runs the `install.sh` shipped with the new release (the stamped one next to the tarball if its version matches, otherwise the one inside the tarball), never the installed one.
 * The upgrade refuses to run while agent turns are executing (use `--force` to override).
 * After installing, it polls `/health`; if the new release does not come up, it switches `/opt/darjeeling/current` back to the previous release.
-* Roll back manually with `sudo darjeeling rollback`.
+* Roll back manually with `sudo darjeeling rollback` (it uses `/opt/darjeeling/previous`).
+
+#### Hosts bound to `0.0.0.0` or `::`
+Since 1.0.4 the server refuses to listen on every interface (`0.0.0.0`, `::`) or on a link-local address, and will not start with such a `DARJEELING_BIND` or `DARJEELING_HOST`. The installer checks this before changing anything:
+* With `--bind <ip>` or `--network <mode>`, it rewrites the env file to that address.
+* With `--yes` and exactly one Tailscale or NordVPN Meshnet address on the host, it rewrites the env file to that address.
+* Otherwise it stops (exit code 4) and lists the choices. Re-run with, for example, `--bind 100.101.102.103`, `--network meshnet`, `--network lan` or `--network loopback`.
+
+To fix it by hand, set one of these in `/etc/darjeeling/darjeeling.env` and restart the service:
+
+```bash
+DARJEELING_BIND=interface:tailscale0      # or interface:nordlynx
+DARJEELING_BIND=address:100.101.102.103   # a specific overlay or LAN address
+DARJEELING_BIND=loopback                  # Tailscale Serve or SSH forwarding
+```
+
+#### Permission ceiling after a 1.0.3 migration
+If the host was migrated from 4.1.0 by the 1.0.3 installer and the ceiling is still `bypassPermissions`, the installer keeps it and prints a warning. Interactive runs ask whether to keep it; `--yes` keeps it. To lower it:
+
+```bash
+sudo darjeeling config set permission-ceiling acceptEdits
+sudo systemctl restart darjeeling.service
+```
 
 ### Rebuilding Virtual Environments After Distro Upgrades
 When upgrading your underlying Linux distribution (e.g., Debian 12 with Python 3.11 to Debian 13 with Python 3.13), existing virtual environments break because the underlying Python binary is replaced.
