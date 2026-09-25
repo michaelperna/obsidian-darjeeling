@@ -18,7 +18,7 @@ REPO = Path(__file__).resolve().parents[2]
 @pytest.mark.parametrize(
     "ip",
     ["127.0.0.1", "127.8.9.1", "::1", "10.1.2.3", "172.16.0.1", "172.31.255.254",
-     "192.168.1.10", "100.64.0.1", "100.127.255.254", "fd00::1", "fc00::5", "[fd7a:115c:a1e0::1]"],
+     "192.168.1.10", "100.64.0.1", "100.127.255.255", "fd00::1", "fc00::5", "[fd7a:115c:a1e0::1]"],
 )
 def test_private_addresses_allowed(ip):
     assert config._is_private_ip(ip)
@@ -51,7 +51,7 @@ def test_allow_public_bind_overrides(monkeypatch):
 
 @pytest.mark.parametrize("spec,expected", [
     ("", "127.0.0.1"), ("loopback", "127.0.0.1"), ("localhost", "127.0.0.1"),
-    ("address:100.73.1.2", "100.73.1.2"), ("192.168.0.2", "192.168.0.2"),
+    ("address:100.64.0.2", "100.64.0.2"), ("192.168.0.2", "192.168.0.2"),
     ("address:[fd00::2]", "fd00::2"),
 ])
 def test_resolve_bind_accepts(spec, expected, monkeypatch):

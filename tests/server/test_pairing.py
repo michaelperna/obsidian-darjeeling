@@ -77,13 +77,16 @@ def test_expired_code_rejected(server):
     assert pair_res.status_code == 401
 
 
-def test_5_bad_attempts_burn_code(server):
-    """5 consecutive bad attempts burn active pairing codes."""
+def test_bad_attempts_do_not_burn_live_codes(server):
+    """Wrong guesses are rate-limited per client but never invalidate a live code.
+
+    Burning every code after a few failures let anyone who could reach the
+    server cancel an in-progress pairing (see test_pairing_ratelimit.py).
+    """
     res = httpx.post(f"{server.base}/api/pair/code", headers=server.headers())
     assert res.status_code == 200
     valid_code = res.json()["code"]
 
-    # 5 failed attempts with an invalid code
     for _ in range(5):
         bad_res = httpx.post(
             f"{server.base}/api/pair",
@@ -91,12 +94,11 @@ def test_5_bad_attempts_burn_code(server):
         )
         assert bad_res.status_code == 401
 
-    # Now attempt with the originally valid code; it should be burned
     attempt_res = httpx.post(
         f"{server.base}/api/pair",
         json={"code": valid_code},
     )
-    assert attempt_res.status_code == 401
+    assert attempt_res.status_code == 200
 
 
 def test_legacy_token_keeps_working(server):
