@@ -104,6 +104,72 @@ def _atomic_write_json(path: Path, data: Any) -> None:
     os.replace(temp_name, path)
 
 
+def _legacy_record() -> Dict[str, Any]:
+    now_iso = datetime.now(timezone.utc).isoformat()
+    return {
+        "device_id": "legacy",
+        "token_hash": hashlib.sha256(AUTH_TOKEN.encode("utf-8")).hexdigest(),
+        "device_name": "Legacy 4.1.0 Token",
+        "platform": "unknown",
+        "created": now_iso,
+        "last_seen": now_iso,
+        "revoked": False,
+    }
+
+
+def ensure_legacy_record() -> str:
+    """Startup check that the host token keeps working after an upgrade.
+
+    Returns what happened: "created" (no devices.json yet, seeded with the
+    host token), "seeded" (devices.json had no legacy record, one was added),
+    "present" (a legacy record exists, revoked or not -- a revocation is
+    never undone), "unreadable" (fail closed, error logged) or "no-token".
+
+    Hosts installed or upgraded by 1.0.3 and earlier can have a devices.json
+    without a "legacy" record; 1.0.4 would then refuse the host token that
+    their existing clients use.
+    """
+    if not AUTH_TOKEN:
+        return "no-token"
+    if not DEVICES_FILE.exists():
+        init_devices_if_needed()
+        return "created"
+    try:
+        with open(DEVICES_FILE, "r", encoding="utf-8") as f:
+            devices = json.load(f)
+        if not isinstance(devices, list):
+            raise ValueError(f"expected a JSON list, got {type(devices).__name__}")
+    except Exception as e:
+        log.error(
+            "Auth: cannot read %s (%s). The host token and every paired device are "
+            "refused until this is fixed. Check that the file is valid JSON and owned "
+            "by the service user with mode 0600 (sudo chown darjeeling:darjeeling %s && "
+            "sudo chmod 600 %s), then restart: sudo systemctl restart darjeeling.service. "
+            "If it cannot be repaired, move it aside and restart; that re-creates it with "
+            "only the host token, and other devices must pair again.",
+            DEVICES_FILE, e, DEVICES_FILE, DEVICES_FILE,
+        )
+        return "unreadable"
+    if any(isinstance(d, dict) and d.get("device_id") == "legacy" for d in devices):
+        return "present"
+    devices.append(_legacy_record())
+    try:
+        _atomic_write_json(DEVICES_FILE, devices)
+    except Exception as e:
+        log.error(
+            "Auth: could not add the host token to %s (%s); clients using the host token "
+            "will be refused. Check the file's ownership and permissions.",
+            DEVICES_FILE, e,
+        )
+        return "unreadable"
+    log.warning(
+        "Auth: %s had no legacy record; added one for the current host token so existing "
+        "clients keep working. Revoke it with: sudo darjeeling devices revoke legacy",
+        DEVICES_FILE,
+    )
+    return "seeded"
+
+
 def init_devices_if_needed() -> List[Dict[str, Any]]:
     """Initialize devices.json with legacy token if missing (ADR-12)."""
     if DEVICES_FILE.exists():
@@ -116,19 +182,7 @@ def init_devices_if_needed() -> List[Dict[str, Any]]:
 
     devices: List[Dict[str, Any]] = []
     if AUTH_TOKEN:
-        legacy_hash = hashlib.sha256(AUTH_TOKEN.encode("utf-8")).hexdigest()
-        now_iso = datetime.now(timezone.utc).isoformat()
-        devices.append(
-            {
-                "device_id": "legacy",
-                "token_hash": legacy_hash,
-                "device_name": "Legacy 4.1.0 Token",
-                "platform": "unknown",
-                "created": now_iso,
-                "last_seen": now_iso,
-                "revoked": False,
-            }
-        )
+        devices.append(_legacy_record())
         try:
             _atomic_write_json(DEVICES_FILE, devices)
             log.info("Initialized %s with legacy device token", DEVICES_FILE)

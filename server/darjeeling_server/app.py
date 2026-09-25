@@ -126,9 +126,9 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import asyncio
-    from darjeeling_server.pairing import init_devices_if_needed
+    from darjeeling_server.pairing import ensure_legacy_record
 
-    init_devices_if_needed()
+    ensure_legacy_record()
     watcher = asyncio.create_task(_devices_watcher_task())
     try:
         yield
