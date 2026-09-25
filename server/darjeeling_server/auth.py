@@ -81,18 +81,22 @@ def verify_token(candidate: Optional[str]) -> Tuple[bool, Optional[str]]:
         return False, None
 
     # Late import to prevent circular dependencies
+    devices_ok = True
     try:
-        from darjeeling_server.pairing import load_devices, touch_device_last_seen
+        from darjeeling_server.pairing import DEVICES_FILE, load_devices, touch_device_last_seen
 
         devices = load_devices()
+        if not isinstance(devices, list):
+            devices, devices_ok = [], False
     except Exception:
-        devices = []
+        DEVICES_FILE = None  # type: ignore[assignment]
+        devices, devices_ok = [], False
 
     candidate_hash = hashlib.sha256(candidate.encode("utf-8")).hexdigest()
 
     # 1. Match against registered devices
     for dev in devices:
-        if dev.get("revoked"):
+        if not isinstance(dev, dict) or dev.get("revoked"):
             continue
         token_hash = dev.get("token_hash", "")
         if token_hash and secrets.compare_digest(candidate_hash, token_hash):
@@ -100,12 +104,28 @@ def verify_token(candidate: Optional[str]) -> Tuple[bool, Optional[str]]:
             touch_device_last_seen(dev_id)
             return True, dev_id
 
-    # 2. Check AUTH_TOKEN (legacy) if legacy record exists and is not revoked, or before devices.json is initialized
+    # 2. Legacy AUTH_TOKEN: honoured only when the device list says so (a
+    #    non-revoked "legacy" record), or when devices.json genuinely does not
+    #    exist yet. An unreadable/corrupt devices.json fails CLOSED: it could
+    #    be hiding a revocation of the legacy token.
     if AUTH_TOKEN and secrets.compare_digest(candidate.encode("utf-8"), AUTH_TOKEN.encode("utf-8")):
-        legacy_dev = next((d for d in devices if d.get("device_id") == "legacy"), None)
+        legacy_dev = next(
+            (d for d in devices if isinstance(d, dict) and d.get("device_id") == "legacy"), None
+        )
         if legacy_dev is not None:
             if not legacy_dev.get("revoked"):
                 return True, "legacy"
+            return False, None
+        if not devices_ok:
+            log.warning("Auth: device list unavailable; refusing legacy token")
+            return False, None
+        try:
+            devices_file_exists = DEVICES_FILE is not None and DEVICES_FILE.exists()
+        except OSError:
+            devices_file_exists = True
+        if devices_file_exists:
+            # devices.json exists but yielded no legacy record: either it was
+            # removed on purpose or the file could not be read.
             return False, None
         return True, "legacy"
 
