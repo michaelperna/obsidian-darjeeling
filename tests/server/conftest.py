@@ -40,6 +40,13 @@ if str(REPO) not in sys.path:
 if str(REPO / "server") not in sys.path:
     sys.path.insert(0, str(REPO / "server"))
 
+# In-process imports of darjeeling_server.config resolve STATE_DIR and mint a
+# token at import time; keep that out of the developer's real ~/.local/state.
+if not os.environ.get("DARJEELING_STATE_DIR"):
+    import tempfile as _tempfile
+
+    os.environ["DARJEELING_STATE_DIR"] = _tempfile.mkdtemp(prefix="djstate")
+
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 pytest_plugins = [
     f"tests.server.fixtures.{p.stem}"

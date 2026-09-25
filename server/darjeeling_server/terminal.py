@@ -2,6 +2,7 @@
 
 import asyncio
 import codecs
+import collections
 import contextlib
 import fcntl
 import json
@@ -34,12 +35,16 @@ from darjeeling_server.config import (
     DEFAULT_SESSION,
     TMUX_TMPDIR,
     VAULT_PATH,
+    child_env,
     log,
 )
 
 router = APIRouter(tags=["terminal"])
 
 MAX_INPUT_BYTES = 64 * 1024
+# PTY output buffered per terminal socket before the reader is paused.
+MAX_OUTPUT_BUFFER_BYTES = 1024 * 1024
+PTY_READ_CHUNK = 65536
 
 
 def sanitize_session_name(name: str) -> str:
@@ -56,7 +61,9 @@ def set_pty_size(fd: int, rows: int, cols: int) -> None:
 
 def tmux(*args: str, timeout: int = 10) -> subprocess.CompletedProcess:
     """Run tmux with DARJEELING_TMUX_SOCKET and TMUX_TMPDIR (ADR-15)."""
-    env = os.environ.copy()
+    # The tmux server inherits this env and hands it to every shell/agent it
+    # spawns, so it must never carry DARJEELING_* or DEEPSEEK_API_KEY.
+    env = child_env()
     if TMUX_TMPDIR:
         env["TMUX_TMPDIR"] = TMUX_TMPDIR
     cmd = ["tmux", "-L", DARJEELING_TMUX_SOCKET, *args]
@@ -95,6 +102,83 @@ def _write_all(fd: int, data: bytes) -> None:
                 break
         except OSError:
             break
+
+
+class BoundedPtyReader:
+    """
+    Reads a non-blocking fd into a byte-bounded buffer with backpressure.
+
+    When more than `max_bytes` are buffered (the websocket is slower than
+    the PTY), the fd is removed from the event loop until the consumer
+    drains below half the limit. The kernel PTY buffer then fills and the
+    writer (tmux) blocks, instead of the server growing without bound.
+    """
+
+    def __init__(self, loop: asyncio.AbstractEventLoop, fd: int, max_bytes: int = MAX_OUTPUT_BUFFER_BYTES):
+        self.loop = loop
+        self.fd = fd
+        self.max_bytes = max_bytes
+        self.buf: collections.deque = collections.deque()
+        self.buffered = 0
+        self.eof = False
+        self.reading = False
+        self._wake = asyncio.Event()
+
+    @property
+    def paused(self) -> bool:
+        return not self.reading and not self.eof
+
+    def start(self) -> None:
+        self._resume()
+
+    def _resume(self) -> None:
+        if not self.reading and not self.eof:
+            self.reading = True
+            self.loop.add_reader(self.fd, self._on_readable)
+
+    def _pause(self) -> None:
+        if self.reading:
+            self.reading = False
+            with contextlib.suppress(Exception):
+                self.loop.remove_reader(self.fd)
+
+    def close(self) -> None:
+        self._pause()
+        self.eof = True
+        self._wake.set()
+
+    def _on_readable(self) -> None:
+        if self.buffered >= self.max_bytes:
+            self._pause()
+            return
+        try:
+            data = os.read(self.fd, PTY_READ_CHUNK)
+        except (BlockingIOError, InterruptedError):
+            return
+        except OSError:
+            self.close()
+            return
+        if not data:
+            self.close()
+            return
+        self.buf.append(data)
+        self.buffered += len(data)
+        self._wake.set()
+        if self.buffered >= self.max_bytes:
+            self._pause()
+
+    async def get(self) -> Optional[bytes]:
+        """Next chunk, or None once the fd hit EOF and the buffer is empty."""
+        while not self.buf and not self.eof:
+            self._wake.clear()
+            await self._wake.wait()
+        if not self.buf:
+            return None
+        chunk = self.buf.popleft()
+        self.buffered -= len(chunk)
+        if self.buffered <= self.max_bytes // 2:
+            self._resume()
+        return chunk
 
 
 async def write_to_pty(fd: int, data: bytes) -> None:
@@ -154,7 +238,14 @@ async def create_session(req: CreateSessionRequest):
     name = sanitize_session_name(req.name)
     cwd = Path(req.cwd).expanduser() if req.cwd else VAULT_PATH
     if not cwd.is_dir():
-        cwd = Path.home()
+        # Fall back to the vault, never to $HOME (which holds ~/.claude,
+        # SSH keys and the rest of the account).
+        cwd = VAULT_PATH
+    if not cwd.is_dir():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Working directory does not exist: {req.cwd or cwd}",
+        )
 
     if tmux("has-session", "-t", f"={name}").returncode == 0:
         return {"status": "exists", "name": name}
@@ -255,7 +346,7 @@ async def terminal_channel(
     master_fd, slave_fd = pty_open()
     set_pty_size(master_fd, DEFAULT_ROWS, DEFAULT_COLS)
 
-    env = os.environ.copy()
+    env = child_env()
     if TMUX_TMPDIR:
         env["TMUX_TMPDIR"] = TMUX_TMPDIR
     env["TERM"] = "xterm-256color"
@@ -270,35 +361,15 @@ async def terminal_channel(
     os.close(slave_fd)
 
     loop = asyncio.get_running_loop()
-    queue: asyncio.Queue = asyncio.Queue()
-    reader_removed = False
-
-    def remove_reader_once() -> None:
-        nonlocal reader_removed
-        if not reader_removed:
-            reader_removed = True
-            with contextlib.suppress(Exception):
-                loop.remove_reader(master_fd)
-
-    def on_readable() -> None:
-        try:
-            data = os.read(master_fd, 65536)
-            if not data:
-                remove_reader_once()
-                queue.put_nowait(None)
-                return
-            queue.put_nowait(data)
-        except (OSError, BlockingIOError):
-            remove_reader_once()
-            queue.put_nowait(None)
-
-    loop.add_reader(master_fd, on_readable)
+    reader = BoundedPtyReader(loop, master_fd)
+    reader.start()
 
     async def monitor_proc() -> None:
         with contextlib.suppress(Exception):
             await proc.wait()
-            remove_reader_once()
-            queue.put_nowait(None)
+            # Let the reader drain what tmux wrote before it exited.
+            await asyncio.sleep(0.05)
+            reader.close()
 
     proc_monitor = asyncio.create_task(monitor_proc())
 
@@ -309,7 +380,7 @@ async def terminal_channel(
     async def pump_out() -> None:
         nonlocal shell_ended
         while True:
-            chunk = await queue.get()
+            chunk = await reader.get()
             if chunk is None:
                 shell_ended = True
                 break
@@ -359,8 +430,7 @@ async def terminal_channel(
         log.warning("Terminal channel error: %s", err)
     finally:
         unregister_ws(websocket)
-        remove_reader_once()
-        queue.put_nowait(None)
+        reader.close()
         proc_monitor.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await pump

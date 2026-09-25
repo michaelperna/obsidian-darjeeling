@@ -2,10 +2,58 @@
 
 import shutil
 import subprocess
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+import uuid
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional
 
 if TYPE_CHECKING:
     from darjeeling_server.turns import TurnRequest
+
+
+class ArgvError(ValueError):
+    """A user-supplied value cannot be placed on an agent command line."""
+
+
+def safe_value(name: str, value: Optional[str]) -> Optional[str]:
+    """
+    Guard a user-supplied value destined for a CLI flag argument.
+
+    A value that begins with '-' would be parsed by the agent CLI as another
+    flag (e.g. model="--dangerously-skip-permissions"), so it is refused.
+    Control characters (NUL, newlines) are refused as well: no legitimate
+    model name, tool name, path or id contains them.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ArgvError(f"{name} must be a string")
+    if value.startswith("-"):
+        raise ArgvError(f"{name} must not start with '-'")
+    if any(ord(c) < 32 or ord(c) == 127 for c in value):
+        raise ArgvError(f"{name} contains control characters")
+    return value
+
+
+def safe_values(name: str, values: Iterable[str]) -> List[str]:
+    return [safe_value(name, v) for v in values]  # type: ignore[misc]
+
+
+def is_uuid(value: str) -> bool:
+    """Accepts canonical (dashed) and 32-char hex UUIDs, nothing else."""
+    if not isinstance(value, str) or len(value) not in (32, 36):
+        return False
+    try:
+        uuid.UUID(value)
+    except (ValueError, AttributeError, TypeError):
+        return False
+    return True
+
+
+def safe_session_id(name: str, value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    if not is_uuid(value):
+        raise ArgvError(f"{name} must be a UUID")
+    return value
 
 
 class AgentSpec:
@@ -18,6 +66,9 @@ class AgentSpec:
     """
 
     is_api: bool = False
+    # Extra accepted spellings for permission modes (alias -> canonical id).
+    # Canonical ids are the advertised `permission_modes` ids.
+    permission_aliases: Dict[str, str] = {}
 
     def __init__(
         self,
@@ -65,6 +116,39 @@ class AgentSpec:
             return None
         from darjeeling_server.agents.catalog import check_version_in_range
         return check_version_in_range(self.version(), self.tested_versions)
+
+    @property
+    def permission_mode_ids(self) -> List[str]:
+        return [m["id"] for m in self.permission_modes]
+
+    @property
+    def most_restrictive_mode(self) -> str:
+        # permission_modes are listed most-restrictive first.
+        return self.permission_modes[0]["id"]
+
+    def resolve_permission_mode(self, mode: Optional[str], explicit: bool = True) -> str:
+        """
+        Map a requested permission mode onto this agent's allow-list.
+
+        Absent (explicit=False) -> the most restrictive supported mode.
+        Explicit null or an unknown string -> ValueError (fail closed).
+        """
+        if mode is None:
+            if explicit:
+                raise ValueError(
+                    f"permission_mode must be one of {self.permission_mode_ids} for {self.label}"
+                )
+            return self.most_restrictive_mode
+        if not isinstance(mode, str):
+            raise ValueError("permission_mode must be a string")
+        if mode in self.permission_mode_ids:
+            return mode
+        if mode in self.permission_aliases:
+            return self.permission_aliases[mode]
+        raise ValueError(
+            f"Unknown permission mode '{mode}' for {self.label}; "
+            f"supported: {', '.join(self.permission_mode_ids)}"
+        )
 
     def build_argv(self, req: "TurnRequest") -> List[str]:
         raise NotImplementedError

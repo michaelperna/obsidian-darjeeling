@@ -4,7 +4,11 @@ import json
 import re
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from darjeeling_server.agents.base import AgentSpec
+from darjeeling_server.agents.base import (
+    AgentSpec,
+    safe_session_id,
+    safe_value,
+)
 
 if TYPE_CHECKING:
     from darjeeling_server.turns import TurnRequest
@@ -146,6 +150,14 @@ def normalize_agy_event(
 
 
 class AntigravityAgent(AgentSpec):
+    # Claude-style spellings the plugin may send for agy. bypassPermissions is
+    # accepted (still subject to the host ceiling) and maps to agy's
+    # --dangerously-skip-permissions; 'acceptAll' is no longer accepted.
+    permission_aliases = {
+        "acceptEdits": "accept-edits",
+        "bypassPermissions": "bypassPermissions",
+    }
+
     def __init__(self):
         super().__init__(
             key="agy",
@@ -175,15 +187,21 @@ class AntigravityAgent(AgentSpec):
                 "use Claude Code or DeepSeek for larger prompts."
             )
 
+        model_req = safe_value("model", req.model or None)
+        effort = safe_value("effort", req.effort or None)
+        mode = self.resolve_permission_mode(
+            req.permission_mode, explicit="permission_mode" in req.model_fields_set
+        )
+        resume = safe_session_id("resume", req.resume or None)
+
         argv = [self.binary, "--output-format", "stream-json"]
 
-        effort = req.effort
         if effort:
             if effort not in ("low", "medium", "high"):
                 effort = "high" if effort in ("xhigh", "max") else "medium"
 
-        if req.model:
-            model = req.model
+        if model_req:
+            model = model_req
             has_effort_suffix = any(model.endswith(f"-{e}") for e in ("high", "medium", "low"))
             if effort:
                 if has_effort_suffix:
@@ -193,17 +211,15 @@ class AntigravityAgent(AgentSpec):
             argv += ["--model", model]
         elif effort:
             argv += ["--effort", effort]
-        if req.permission_mode:
-            mode = req.permission_mode
-            if mode in ("acceptAll", "bypassPermissions"):
-                argv.append("--dangerously-skip-permissions")
-            elif mode == "acceptEdits":
-                argv += ["--mode", "accept-edits"]
-            else:
-                argv += ["--mode", mode]
-        if req.resume:
-            argv += ["--conversation", req.resume]
+        # Always pass an explicit mode.
+        if mode == "bypassPermissions":
+            argv.append("--dangerously-skip-permissions")
+        else:
+            argv += ["--mode", mode]
+        if resume:
+            argv += ["--conversation", resume]
         if req.json_schema is not None:
             argv += ["--json-schema", json.dumps(req.json_schema)]
+        # Attached form: the prompt can never be parsed as a separate flag.
         argv.append(f"-p={prompt}")
         return argv
