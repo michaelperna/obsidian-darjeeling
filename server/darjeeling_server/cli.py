@@ -1,4 +1,11 @@
-"""Project Darjeeling Management CLI."""
+"""Project Darjeeling Management CLI.
+
+The CLI reads the server's env file (``DARJEELING_ENV``, default
+/etc/darjeeling/darjeeling.env) so it sees the same state directory and token
+path as the service. Commands that write server state (``pair``, ``devices``)
+drop from root to the service user first, so every file they create stays
+readable by the running server.
+"""
 
 import argparse
 import json
@@ -15,15 +22,21 @@ ENV_PATH = Path(os.environ.get("DARJEELING_ENV", "/etc/darjeeling/darjeeling.env
 CURRENT_DIR = Path(os.environ.get("DARJEELING_CURRENT", "/opt/darjeeling/current"))
 STATE_DIR = Path(os.environ.get("DARJEELING_STATE_DIR", "/var/lib/darjeeling"))
 BACKUP_DIR = Path(os.environ.get("DARJEELING_BACKUPS", "/opt/darjeeling/backups"))
+DEFAULT_SERVICE_USER = "darjeeling"
 
 KEY_MAP = {
     "permission-ceiling": "DARJEELING_PERMISSION_CEILING",
     "max-concurrent-turns": "DARJEELING_MAX_CONCURRENT_TURNS",
     "bind": "DARJEELING_BIND",
-    "vault-sync": "DARJEELING_VAULT_PATH",
+    "vault": "DARJEELING_VAULT",
+    "vault-sync": "DARJEELING_VAULT_SYNC",
     "deepseek-api-key": "DEEPSEEK_API_KEY",
 }
 REV_KEY_MAP = {v: k for k, v in KEY_MAP.items()}
+VALID_PERMISSION_CEILINGS = ("plan", "acceptEdits", "bypassPermissions")
+
+# Commands that create or modify files the server reads.
+STATE_WRITING_COMMANDS = {"pair", "devices"}
 
 
 def parse_env_file(path: Path) -> Dict[str, str]:
@@ -43,10 +56,100 @@ def parse_env_file(path: Path) -> Dict[str, str]:
     return res
 
 
-def write_env_file(path: Path, updates: Dict[str, str], mode: Optional[int] = None) -> None:
+def load_env_into_environ(path: Optional[Path] = None) -> Dict[str, str]:
+    """Load the server env file into os.environ without overriding values that
+    are already set in the process environment. Returns what was applied."""
+    path = path or ENV_PATH
+    applied: Dict[str, str] = {}
+    try:
+        values = parse_env_file(path)
+    except OSError:
+        # Unreadable (not root and not in the service group): fall back to
+        # the process environment.
+        return applied
+    for k, v in values.items():
+        if k not in os.environ:
+            os.environ[k] = v
+            applied[k] = v
+    return applied
+
+
+def _refresh_paths() -> None:
+    global STATE_DIR
+    STATE_DIR = Path(os.environ.get("DARJEELING_STATE_DIR", "/var/lib/darjeeling"))
+
+
+def resolve_service_user(state_dir: Optional[Path] = None) -> Optional[str]:
+    """The account the server runs as: DARJEELING_USER, else the owner of the
+    state directory, else 'darjeeling' if that account exists."""
+    try:
+        import pwd
+    except ImportError:  # pragma: no cover - non-Unix
+        return None
+    explicit = os.environ.get("DARJEELING_USER", "").strip()
+    if explicit:
+        return explicit
+    sd = state_dir or STATE_DIR
+    try:
+        uid = sd.stat().st_uid
+        if uid != 0:
+            return pwd.getpwuid(uid).pw_name
+    except (OSError, KeyError):
+        pass
+    try:
+        pwd.getpwnam(DEFAULT_SERVICE_USER)
+        return DEFAULT_SERVICE_USER
+    except KeyError:
+        return None
+
+
+def drop_privileges(user: Optional[str] = None) -> bool:
+    """When running as root, switch to the service user for the rest of the
+    process. Returns True if privileges were dropped."""
+    if not hasattr(os, "geteuid") or os.geteuid() != 0:
+        return False
+    user = user or resolve_service_user()
+    if not user or user == "root":
+        print(
+            "Warning: running as root and no service user found; files written now "
+            "may not be readable by darjeeling.service.",
+            file=sys.stderr,
+        )
+        return False
+    import pwd
+
+    pw = pwd.getpwnam(user)
+    os.initgroups(user, pw.pw_gid)
+    os.setgid(pw.pw_gid)
+    os.setuid(pw.pw_uid)
+    os.environ["HOME"] = pw.pw_dir
+    os.environ["USER"] = user
+    os.environ["LOGNAME"] = user
+    return True
+
+
+def _preserve_owner(src: Path, dst_tmp: Path) -> None:
+    if not src.exists() or not hasattr(os, "chown"):
+        return
+    try:
+        st = os.stat(src)
+        os.chmod(dst_tmp, st.st_mode & 0o777)
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            os.chown(dst_tmp, st.st_uid, st.st_gid)
+    except OSError:
+        pass
+
+
+def write_env_file(
+    path: Path,
+    updates: Dict[str, str],
+    mode: Optional[int] = None,
+    remove: Optional[List[str]] = None,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     lines: List[str] = []
     keys_written = set()
+    drop = set(remove or [])
     if path.exists():
         with open(path, "r", encoding="utf-8") as f:
             for raw_line in f:
@@ -57,9 +160,12 @@ def write_env_file(path: Path, updates: Dict[str, str], mode: Optional[int] = No
                 if "=" in line:
                     k, _ = line.split("=", 1)
                     k = k.strip()
+                    if k in drop:
+                        continue
                     if k in updates:
-                        lines.append(f"{k}={updates[k]}\n")
-                        keys_written.add(k)
+                        if k not in keys_written:
+                            lines.append(f"{k}={updates[k]}\n")
+                            keys_written.add(k)
                     else:
                         lines.append(raw_line)
                 else:
@@ -71,15 +177,75 @@ def write_env_file(path: Path, updates: Dict[str, str], mode: Optional[int] = No
     tmp_path = path.with_suffix(".tmp")
     with open(tmp_path, "w", encoding="utf-8") as f:
         f.writelines(lines)
+    # Keep owner, group and mode: the env file is root:<service group> 0640
+    # and the service user must still be able to read it afterwards.
+    _preserve_owner(path, tmp_path)
     if mode is not None:
         os.chmod(tmp_path, mode)
-    elif path.exists():
-        try:
-            stat = os.stat(path)
-            os.chmod(tmp_path, stat.st_mode & 0o777)
-        except Exception:
-            pass
     os.replace(tmp_path, path)
+
+
+def deepseek_secret_path() -> Path:
+    # Must match darjeeling_server.config.get_deepseek_api_key().
+    return STATE_DIR / "secrets" / "deepseek_api_key"
+
+
+def write_deepseek_secret(value: str) -> Path:
+    target = deepseek_secret_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(target.parent, 0o700)
+    tmp = target.with_name(target.name + ".tmp")
+    fd = os.open(str(tmp), os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600)
+    with open(fd, "w", encoding="utf-8") as f:
+        f.write(value.strip() + "\n")
+    os.chmod(tmp, 0o600)
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        user = resolve_service_user()
+        if user and user != "root":
+            import pwd
+
+            pw = pwd.getpwnam(user)
+            os.chown(target.parent, pw.pw_uid, pw.pw_gid)
+            os.chown(tmp, pw.pw_uid, pw.pw_gid)
+    os.replace(tmp, target)
+    return target
+
+
+def _pairing_module():
+    """Import darjeeling_server.pairing with the configuration main() loaded.
+
+    ``python -m darjeeling_server.cli`` imports the package (and so config)
+    before main() can read the env file, which leaves config pointing at
+    default paths. Reload config and pairing so they pick up the env file's
+    state dir and token path, running as the (possibly dropped) current user.
+    """
+    import importlib
+    import sys as _sys
+
+    if "darjeeling_server.config" in _sys.modules:
+        importlib.reload(_sys.modules["darjeeling_server.config"])
+        if "darjeeling_server.pairing" in _sys.modules:
+            importlib.reload(_sys.modules["darjeeling_server.pairing"])
+    from darjeeling_server import pairing
+
+    return pairing
+
+
+def read_version() -> str:
+    """Installed version: the release VERSION file, else the source tree's."""
+    candidates = [
+        CURRENT_DIR / "VERSION",
+        Path(__file__).resolve().parent.parent / "VERSION",
+    ]
+    for c in candidates:
+        try:
+            if c.is_file():
+                v = c.read_text(encoding="utf-8").strip()
+                if v:
+                    return v
+        except OSError:
+            continue
+    return "unknown"
 
 
 def get_server_port() -> int:
@@ -123,19 +289,13 @@ def get_active_turns_count() -> int:
 # ---------------------------------------------------------------------------
 
 def cmd_version(_args: argparse.Namespace) -> int:
-    v_file = CURRENT_DIR / "VERSION"
-    if v_file.exists():
-        print(v_file.read_text().strip())
-    else:
-        print("1.0.3")
+    print(read_version())
     return 0
 
 
 def cmd_status(_args: argparse.Namespace) -> int:
     print("=== Project Darjeeling Status ===")
-    v_file = CURRENT_DIR / "VERSION"
-    version = v_file.read_text().strip() if v_file.exists() else "1.0.3"
-    print(f"Version: {version}")
+    print(f"Version: {read_version()}")
 
     # Check services via systemctl
     for svc in ["darjeeling.service", "darjeeling-tmux.service"]:
@@ -329,7 +489,7 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
 
 
 def cmd_pair(_args: argparse.Namespace) -> int:
-    from darjeeling_server import pairing
+    pairing = _pairing_module()
 
     pair_code = pairing.create_code()
     fmt_code = f"{pair_code[:4]} {pair_code[4:]}"
@@ -406,17 +566,11 @@ def cmd_devices(args: argparse.Namespace) -> int:
         if not target:
             print("Error: Specify device ID to revoke.")
             return 1
-        found = False
-        for d in devices:
-            if d.get("device_id") == target:
-                d["revoked"] = True
-                found = True
-                break
-        if not found:
+        pairing = _pairing_module()
+
+        if not pairing.revoke(target):
             print(f"Error: Device '{target}' not found.")
             return 1
-
-        dev_file.write_text(json.dumps(devices, indent=2))
         print(f"Device '{target}' revoked successfully.")
         return 0
 
@@ -435,8 +589,20 @@ def cmd_config(args: argparse.Namespace) -> int:
     mapped_key = KEY_MAP.get(key, key)
 
     if sub == "get":
+        if mapped_key == "DEEPSEEK_API_KEY":
+            secret = deepseek_secret_path()
+            try:
+                if secret.is_file() and secret.read_text(encoding="utf-8").strip():
+                    print(f"(set, stored in {secret})")
+                    return 0
+            except OSError as e:
+                print(f"(cannot read {secret}: {e})", file=sys.stderr)
+                return 1
         env = parse_env_file(ENV_PATH)
         val = env.get(mapped_key)
+        if val is not None and mapped_key == "DEEPSEEK_API_KEY":
+            print(f"(set in {ENV_PATH}; move it with: sudo darjeeling config set deepseek-api-key)")
+            return 0
         if val is not None:
             print(val)
             return 0
@@ -459,10 +625,24 @@ def cmd_config(args: argparse.Namespace) -> int:
             print("Error: Missing value to set.", file=sys.stderr)
             return 1
 
-        # G-51: deepseek-api-key written 0600
-        mode = 0o600 if is_secret else None
-        write_env_file(ENV_PATH, {mapped_key: val}, mode=mode)
-        print(f"Updated {key} ({mapped_key}).")
+        if is_secret:
+            # Secrets live in the state dir (0600, service user), not the env
+            # file; the server reads this path first.
+            target = write_deepseek_secret(val)
+            if "DEEPSEEK_API_KEY" in parse_env_file(ENV_PATH):
+                write_env_file(ENV_PATH, {}, remove=["DEEPSEEK_API_KEY"])
+            print(f"Stored {key} in {target}. Restart to apply: sudo systemctl restart darjeeling.service")
+            return 0
+
+        if mapped_key == "DARJEELING_PERMISSION_CEILING" and val not in VALID_PERMISSION_CEILINGS:
+            print(
+                f"Error: permission-ceiling must be one of: {', '.join(VALID_PERMISSION_CEILINGS)}",
+                file=sys.stderr,
+            )
+            return 1
+
+        write_env_file(ENV_PATH, {mapped_key: val})
+        print(f"Updated {key} ({mapped_key}). Restart to apply: sudo systemctl restart darjeeling.service")
         return 0
 
     return 0
@@ -604,8 +784,18 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     if Path("/usr/local/bin/darjeeling").exists():
         Path("/usr/local/bin/darjeeling").unlink()
 
-    if Path("/opt/darjeeling").exists():
-        shutil.rmtree("/opt/darjeeling", ignore_errors=True)
+    # Only remove what the installer created; anything else under
+    # /opt/darjeeling (for example a git checkout) is left alone.
+    opt = Path("/opt/darjeeling")
+    current = opt / "current"
+    if current.is_symlink() or current.exists():
+        current.unlink()
+    for sub in ("releases", "backups"):
+        shutil.rmtree(opt / sub, ignore_errors=True)
+    try:
+        opt.rmdir()
+    except OSError:
+        pass
 
     if args.purge:
         if Path("/etc/darjeeling").exists():
@@ -622,7 +812,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         print("Removing system user 'darjeeling'...")
         subprocess.run(["userdel", "darjeeling"], check=False)
 
-    print("Uninstall complete. (Note: ~/.claude is never touched per G-50).")
+    print("Uninstall complete. (~/.claude of the service user is never touched.)")
     return 0
 
 
@@ -630,7 +820,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
 # CLI Argument Parser
 # ---------------------------------------------------------------------------
 
-def main() -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="darjeeling", description="Project Darjeeling Management CLI")
     subparsers = parser.add_subparsers(dest="command")
 
@@ -644,7 +834,7 @@ def main() -> int:
     subparsers.add_parser("doctor", help="Perform preflight and system health checks")
 
     # pair
-    p_pair = subparsers.add_parser("pair", help="Generate device pairing code and QR")
+    p_pair = subparsers.add_parser("pair", help="Generate an 8-digit device pairing code")
     p_pair.add_argument("--state-dir", help="Path to state directory (default: /var/lib/darjeeling)")
 
     # devices
@@ -662,7 +852,7 @@ def main() -> int:
     p_conf = subparsers.add_parser("config", help="Get or set configuration options")
     p_conf_sub = p_conf.add_subparsers(dest="config_command", required=True)
     p_conf_get = p_conf_sub.add_parser("get", help="Get configuration value")
-    p_conf_get.add_argument("key", help="Configuration key (permission-ceiling, max-concurrent-turns, bind, vault-sync, deepseek-api-key)")
+    p_conf_get.add_argument("key", help="Configuration key (permission-ceiling, max-concurrent-turns, bind, vault, vault-sync, deepseek-api-key)")
     p_conf_set = p_conf_sub.add_parser("set", help="Set configuration value")
     p_conf_set.add_argument("key", help="Configuration key")
     p_conf_set.add_argument("val", nargs="?", default=None, help="Value to set (reads stdin if omitted for secrets)")
@@ -683,11 +873,20 @@ def main() -> int:
     p_un.add_argument("--delete-vault", action="store_true", help="Delete vault directory")
     p_un.add_argument("--remove-user", action="store_true", help="Delete system service user")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if not args.command:
         parser.print_help()
         return 0
+
+    # See the same configuration as darjeeling.service (state dir, token path).
+    load_env_into_environ()
+    if args.command == "pair" and getattr(args, "state_dir", None):
+        os.environ["DARJEELING_STATE_DIR"] = args.state_dir
+    _refresh_paths()
+
+    if args.command in STATE_WRITING_COMMANDS:
+        drop_privileges()
 
     dispatch = {
         "version": cmd_version,

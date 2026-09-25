@@ -9,11 +9,19 @@
 
 set -euo pipefail
 
-DJ_VERSION="1.0.0-dev"
+# DJ_VERSION and TARBALL_SHA256 are stamped by scripts/release/stamp-install.sh.
+# Left empty, the version is read from the VERSION file of the payload being
+# installed (tarball, or the directory this script lives in).
+DJ_VERSION=""
 TARBALL_SHA256=""
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+STATE_ROOT="/var/lib/darjeeling"
 INSTALL_LOG="/var/log/darjeeling-install.log"
-mkdir -p "$(dirname "$INSTALL_LOG")" 2>/dev/null || INSTALL_LOG="/tmp/darjeeling-install.log"
+if ! { mkdir -p "$(dirname "$INSTALL_LOG")" && : >> "$INSTALL_LOG"; } 2>/dev/null; then
+    INSTALL_LOG="${TMPDIR:-/tmp}/darjeeling-install.log"
+fi
 
+# shellcheck disable=SC2329  # invoked via the ERR trap
 catch_error() {
     local exit_code="$1"
     local line_no="$2"
@@ -37,6 +45,57 @@ err() {
     echo "[ERROR] $*" | tee -a "$INSTALL_LOG" >&2
 }
 
+# Resolve DJ_VERSION when it was not stamped or passed with --version.
+resolve_version() {
+    if [[ -z "$DJ_VERSION" && -n "$TARBALL_PATH" && -f "$TARBALL_PATH" ]]; then
+        DJ_VERSION="$(tar -xzOf "$TARBALL_PATH" VERSION 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
+    fi
+    if [[ -z "$DJ_VERSION" && -f "${SCRIPT_DIR}/VERSION" ]]; then
+        DJ_VERSION="$(head -n1 "${SCRIPT_DIR}/VERSION" | tr -d '[:space:]')"
+    fi
+    if [[ -z "$DJ_VERSION" && -f "${SCRIPT_DIR}/pyproject.toml" ]]; then
+        DJ_VERSION="$(sed -n 's/^version *= *"\([^"]*\)".*/\1/p' "${SCRIPT_DIR}/pyproject.toml" | head -n1)"
+    fi
+    if [[ -z "$DJ_VERSION" ]]; then
+        err "Cannot determine the Darjeeling version (no VERSION file). Pass --version <ver> or use a release tarball."
+        exit 1
+    fi
+    if [[ ! "$DJ_VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
+        err "Refusing suspicious version string: ${DJ_VERSION}"
+        exit 1
+    fi
+}
+
+# Set KEY=VALUE in an env file in place (keeps line position, owner and mode).
+# Values are passed through the environment, so no sed escaping is needed.
+set_env_var() {
+    local key="$1" val="$2" file="$3"
+    local tmp
+    tmp="$(mktemp)"
+    K="$key" V="$val" awk 'BEGIN { k = ENVIRON["K"]; v = ENVIRON["V"]; done = 0 }
+        index($0, k "=") == 1 { if (!done) print k "=" v; done = 1; next }
+        { print }
+        END { if (!done) print k "=" v }' "$file" > "$tmp"
+    cat "$tmp" > "$file"
+    rm -f "$tmp"
+}
+
+# Remove every KEY=... line from an env file in place.
+unset_env_var() {
+    local key="$1" file="$2"
+    local tmp
+    tmp="$(mktemp)"
+    K="$key" awk 'BEGIN { k = ENVIRON["K"] } index($0, k "=") != 1 { print }' "$file" > "$tmp"
+    cat "$tmp" > "$file"
+    rm -f "$tmp"
+}
+
+get_env_var() {
+    local key="$1" file="$2"
+    [[ -f "$file" ]] || return 0
+    K="$key" awk 'BEGIN { k = ENVIRON["K"] } index($0, k "=") == 1 { v = substr($0, length(k) + 2) } END { gsub(/^["\x27]|["\x27]$/, "", v); print v }' "$file"
+}
+
 usage() {
     cat << 'EOF'
 Usage: sudo bash install.sh [options]
@@ -53,10 +112,12 @@ Options:
   --no-laptop            Disable laptop profile
   --claude <mode>        Claude Code install mode: native (default), apt, skip
   --with-agy             Install Google Antigravity SDK
-  --vault-sync <mode>    Vault sync mode: none (default), obsidian-sync (OD-25, G-32)
+  --vault-sync <mode>    Vault sync mode: none (default), obsidian-sync
   --install-nordvpn      Install NordVPN client
   --version <ver>        Override Darjeeling version
-  --uninstall            Uninstall Darjeeling services and files
+  --uninstall            Uninstall Darjeeling services and installer-created files
+                         (releases, current symlink, units, CLI link); never
+                         deletes anything else under /opt/darjeeling
   --purge                Used with --uninstall to remove /etc and /var/lib directories
   --delete-vault         Used with --uninstall to delete vault directory
   --remove-user          Used with --uninstall to delete service user account
@@ -171,6 +232,10 @@ parse_args() {
 }
 
 run_uninstall() {
+    if [[ "$EUID" -ne 0 ]]; then
+        err "Uninstall must be run as root (use: sudo bash install.sh --uninstall)"
+        exit 1
+    fi
     log "Uninstalling Project Darjeeling..."
     systemctl stop darjeeling.service darjeeling-tmux.service darjeeling-vault-sync.service 2>/dev/null || true
     systemctl disable darjeeling.service darjeeling-tmux.service darjeeling-vault-sync.service 2>/dev/null || true
@@ -180,8 +245,16 @@ run_uninstall() {
     systemctl daemon-reload 2>/dev/null || true
 
     rm -f /usr/local/bin/darjeeling
-    rm -rf /opt/darjeeling
+    # Only remove what the installer created under /opt/darjeeling. Anything
+    # else there (for example a git checkout) is left untouched.
+    rm -f /opt/darjeeling/current
+    rm -rf /opt/darjeeling/releases /opt/darjeeling/backups
+    rmdir /opt/darjeeling 2>/dev/null || true
+    if [[ -d /opt/darjeeling ]]; then
+        log "Left /opt/darjeeling in place because it contains files the installer did not create."
+    fi
     rm -f /etc/udev/rules.d/99-darjeeling-battery.rules 2>/dev/null || true
+    rm -f /etc/systemd/logind.conf.d/darjeeling.conf 2>/dev/null || true
     rm -f /etc/claude-code/managed-settings.json 2>/dev/null || true
 
     if [[ "$UNINSTALL_PURGE" == "true" ]]; then
@@ -191,7 +264,7 @@ run_uninstall() {
     fi
 
     if [[ "$UNINSTALL_REMOVE_USER" == "true" ]]; then
-        log "Removing system users '${SERVICE_USER}' and 'darjeeling-sync' (leaving home directories in place per G-50)..."
+        log "Removing system users '${SERVICE_USER}' and 'darjeeling-sync' (home directories are left in place)..."
         userdel "$SERVICE_USER" 2>/dev/null || true
         userdel "darjeeling-sync" 2>/dev/null || true
     fi
@@ -232,7 +305,7 @@ run_preflight() {
         fi
     fi
 
-    # 3. Architecture check (refuse armv7l per INST-28)
+    # 3. Architecture check (refuse armv7l)
     local arch
     arch="$(uname -m)"
     case "$arch" in
@@ -258,7 +331,7 @@ run_preflight() {
         fi
     fi
 
-    # 5. RAM check for default concurrency (INST-28)
+    # 5. RAM check for default concurrency
     local mem_total=0
     if [[ -f /proc/meminfo ]]; then
         mem_total="$(grep -i MemTotal /proc/meminfo | awk '{print $2}')"
@@ -318,7 +391,7 @@ detect_network() {
             return 0
             ;;
         tailscale)
-            # In Tailscale Serve mode per ADR-16, server binds loopback
+            # In Tailscale Serve mode, server binds loopback
             echo "127.0.0.1"
             return 0
             ;;
@@ -373,7 +446,7 @@ detect_network() {
                 return 0
             fi
 
-            # If auto failed to find any overlay network, exit 3 with instructions (INST-17, F-04)
+            # If auto failed to find any overlay network, exit 3 with instructions
             err "No overlay network (Tailscale, NordVPN Meshnet, Wireguard) detected on this host."
             echo "" >&2
             echo "Project Darjeeling requires a secure overlay network or an explicit bind address." >&2
@@ -397,6 +470,8 @@ main() {
     if [[ "$ACTION" == "uninstall" ]]; then
         run_uninstall
     fi
+
+    resolve_version
 
     local max_concurrent_turns
     max_concurrent_turns="$(run_preflight)"
@@ -453,6 +528,7 @@ EOF
     local legacy_token=""
     local legacy_vault=""
     local legacy_deepseek=""
+    local legacy_ceiling=""
 
     for cand in "/home/${SERVICE_USER}/darjeeling-server/config.env" /home/*/darjeeling-server/config.env; do
         if [[ -f "$cand" ]]; then
@@ -475,6 +551,7 @@ EOF
         legacy_token="$(grep -E '^DARJEELING_TOKEN=' "$legacy_cfg" | cut -d'=' -f2- | tr -d "'\"" || true)"
         legacy_vault="$(grep -E '^DARJEELING_VAULT=' "$legacy_cfg" | cut -d'=' -f2- | tr -d "'\"" || true)"
         legacy_deepseek="$(grep -E '^DEEPSEEK_API_KEY=' "$legacy_cfg" | cut -d'=' -f2- | tr -d "'\"" || true)"
+        legacy_ceiling="$(grep -E '^DARJEELING_PERMISSION_CEILING=' "$legacy_cfg" | tail -n1 | cut -d'=' -f2- | tr -d "'\"" || true)"
 
         if command -v sudo >/dev/null 2>&1; then
             if sudo -l -U "$SERVICE_USER" 2>/dev/null | grep -q "NOPASSWD"; then
@@ -495,7 +572,7 @@ Environment="PATH=/usr/local/bin:/usr/bin:/bin:/home/${SERVICE_USER}/.bun/bin:/h
 EOF
 
         cat << EOF > "${legacy_dir}/MIGRATED_TO_V1.txt"
-This Darjeeling 4.1.0 installation has been migrated to Project Darjeeling v1.0.0.
+This Darjeeling 4.1.0 installation has been migrated to Project Darjeeling ${DJ_VERSION}.
 Managed configuration is now located at /etc/darjeeling/darjeeling.env
 Server daemon is managed under /opt/darjeeling/current
 EOF
@@ -510,7 +587,15 @@ EOF
         usermod -s /bin/bash "$SERVICE_USER" 2>/dev/null || true
     fi
 
-    # Check if service user has sudo permissions (INST-04)
+    # The service user's real home directory (used for HOME in the units and
+    # for the per-user Claude Code install).
+    local user_home
+    user_home="$(getent passwd "$SERVICE_USER" 2>/dev/null | cut -d: -f6 || echo "")"
+    if [[ -z "$user_home" || ! -d "$user_home" ]]; then
+        user_home="$STATE_ROOT"
+    fi
+
+    # Check if service user has sudo permissions
     if command -v sudo >/dev/null 2>&1; then
         if sudo -l -U "$SERVICE_USER" 2>/dev/null | grep -q "(ALL"; then
             warn "User '${SERVICE_USER}' currently has sudo permissions. Hardening recommends removing sudo rules."
@@ -537,7 +622,7 @@ EOF
     chmod 0700 "/var/lib/darjeeling/run"
 
     if [[ "$VAULT_SYNC" == "obsidian-sync" ]]; then
-        log "Configuring vault synchronization for obsidian-sync (OD-25, G-32)..."
+        log "Configuring vault synchronization for obsidian-sync..."
         if ! id -u "darjeeling-sync" >/dev/null 2>&1; then
             log "Creating dedicated sync user 'darjeeling-sync'..."
             useradd -r -s /usr/sbin/nologin -g "$SERVICE_USER" -d /var/lib/darjeeling-sync -m darjeeling-sync 2>/dev/null || true
@@ -551,8 +636,7 @@ EOF
     fi
 
     # 4. Extract or copy release payload into release directory
-    local script_dir
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local script_dir="$SCRIPT_DIR"
 
     local source_tarball=""
     if [[ -n "$TARBALL_PATH" ]]; then
@@ -561,7 +645,7 @@ EOF
         source_tarball="${script_dir}/darjeeling-server-${DJ_VERSION}.tar.gz"
     fi
 
-    if [[ -z "$source_tarball" && ! -d "${script_dir}/darjeeling_server" && -n "$DJ_VERSION" && "$DJ_VERSION" != "1.0.0-dev" ]]; then
+    if [[ -z "$source_tarball" && ! -d "${script_dir}/darjeeling_server" && "$DJ_VERSION" != *-dev ]]; then
         log "Downloading darjeeling-server-${DJ_VERSION}.tar.gz from GitHub release..."
         source_tarball="/tmp/darjeeling-server-${DJ_VERSION}.tar.gz"
         curl -fsSL "https://github.com/michaelperna/obsidian-darjeeling/releases/download/${DJ_VERSION}/darjeeling-server-${DJ_VERSION}.tar.gz" -o "$source_tarball"
@@ -602,7 +686,7 @@ EOF
         mkdir -p "$release_dir/config"
         cp "${script_dir}/config/darjeeling.env.example" "$release_dir/config/"
         cp "${script_dir}/pyproject.toml" "$release_dir/" 2>/dev/null || true
-        cp "${BASH_SOURCE[0]}" "$release_dir/install.sh" 2>/dev/null || true
+        cp "${script_dir}/install.sh" "$release_dir/install.sh" 2>/dev/null || true
         echo "$DJ_VERSION" > "$release_dir/VERSION"
     else
         err "No release payload found (neither --tarball, nor adjacent tarball, nor source directory)."
@@ -626,19 +710,21 @@ EOF
     # Ensure darjeeling_server package is importable from any directory
     find "$release_dir/venv/lib" -maxdepth 2 -type d -name "site-packages" -exec sh -c 'echo "/opt/darjeeling/current" > "$1/darjeeling.pth"' _ {} \;
 
-    # 6. Setup Token (Idempotent: never overwrite existing token per QA-16)
-    local token_file="/var/lib/darjeeling/.token"
-    if [[ "$is_legacy_migration" == "true" && -n "$legacy_token" ]]; then
+    # 6. Setup Token (idempotent: never overwrite an existing token)
+    local token_file="${STATE_ROOT}/.token"
+    if [[ "$is_legacy_migration" == "true" && -n "$legacy_token" && ! -s "$token_file" ]]; then
         log "Migrating legacy authentication token..."
         echo -n "$legacy_token" > "$token_file"
         chown "$SERVICE_USER:$SERVICE_USER" "$token_file"
         chmod 0600 "$token_file"
         log "Authentication token migrated at ${token_file}."
 
-        local dev_file="/var/lib/darjeeling/devices.json"
-        python3 -c "
-import hashlib, json, datetime
-tok = '${legacy_token}'
+        local dev_file="${STATE_ROOT}/devices.json"
+        # Only seed devices.json once; re-running the installer must never
+        # wipe devices that were paired after the migration.
+        [[ -f "$dev_file" ]] || DJ_LEGACY_TOKEN="$legacy_token" DJ_DEV_FILE="$dev_file" python3 -c "
+import hashlib, json, datetime, os
+tok = os.environ['DJ_LEGACY_TOKEN']
 record = {
     'device_id': 'legacy',
     'token_hash': hashlib.sha256(tok.encode('utf-8')).hexdigest(),
@@ -648,15 +734,15 @@ record = {
     'last_seen': None,
     'revoked': False
 }
-with open('${dev_file}', 'w') as f:
+with open(os.environ['DJ_DEV_FILE'], 'w') as f:
     json.dump([record], f, indent=2)
 " 2>/dev/null || true
         chown "$SERVICE_USER:$SERVICE_USER" "$dev_file" 2>/dev/null || true
         chmod 0600 "$dev_file" 2>/dev/null || true
     elif [[ ! -f "$token_file" ]]; then
-        log "Generating secure 32-character authentication token..."
+        log "Generating 256-bit authentication token..."
         local new_token
-        new_token="$(head -c 16 /dev/urandom | xxd -p 2>/dev/null || python3 -c 'import secrets; print(secrets.token_hex(16))')"
+        new_token="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
         echo -n "$new_token" > "$token_file"
         chown "$SERVICE_USER:$SERVICE_USER" "$token_file"
         chmod 0600 "$token_file"
@@ -665,34 +751,50 @@ with open('${dev_file}', 'w') as f:
         log "Existing authentication token preserved at ${token_file}."
     fi
 
-    # 7. Setup Configuration /etc/darjeeling/darjeeling.env (Idempotent per QA-16)
+    # Older CLIs minted a stray root-owned token at ${STATE_ROOT}/token when run
+    # without the env file. The server never reads it; remove it if .token exists.
+    local stray_token="${STATE_ROOT}/token"
+    if [[ -f "$stray_token" && -s "$token_file" ]]; then
+        if [[ "$(stat -c '%U' "$stray_token" 2>/dev/null || echo "")" == "root" ]]; then
+            rm -f "$stray_token"
+            log "Removed stray root-owned token file ${stray_token} (the server uses ${token_file})."
+        fi
+    fi
+
+    # 7. Setup Configuration /etc/darjeeling/darjeeling.env (Idempotent)
     local env_file="/etc/darjeeling/darjeeling.env"
     if [[ "$is_legacy_migration" == "true" ]]; then
         log "Applying legacy migration configuration to ${env_file}..."
+        local env_is_new=false
         if [[ ! -f "$env_file" ]]; then
             cp "$release_dir/config/darjeeling.env.example" "$env_file"
             sed -i "s|^# DARJEELING_BIND=.*|DARJEELING_BIND=${bind_ip}|" "$env_file"
             sed -i "s|^DARJEELING_PORT=.*|DARJEELING_PORT=${PORT}|" "$env_file"
             sed -i "s|^DARJEELING_MAX_CONCURRENT_TURNS=.*|DARJEELING_MAX_CONCURRENT_TURNS=${max_concurrent_turns}|" "$env_file"
+            env_is_new=true
         fi
-        if grep -q "^DARJEELING_PERMISSION_CEILING=" "$env_file"; then
-            sed -i "s|^DARJEELING_PERMISSION_CEILING=.*|DARJEELING_PERMISSION_CEILING=bypassPermissions|" "$env_file"
-        else
-            echo "DARJEELING_PERMISSION_CEILING=bypassPermissions" >> "$env_file"
+        # Permission ceiling: keep an explicit value (from the existing env file,
+        # or from the legacy config on first migration); otherwise acceptEdits.
+        # The installer never raises the ceiling on its own.
+        local ceiling=""
+        if [[ "$env_is_new" != "true" ]]; then
+            ceiling="$(get_env_var DARJEELING_PERMISSION_CEILING "$env_file")"
+        fi
+        if [[ -z "$ceiling" ]]; then
+            case "$legacy_ceiling" in
+                plan|acceptEdits|bypassPermissions) ceiling="$legacy_ceiling" ;;
+                *) ceiling="acceptEdits" ;;
+            esac
+            set_env_var DARJEELING_PERMISSION_CEILING "$ceiling" "$env_file"
+        fi
+        log "Permission ceiling: ${ceiling}"
+        if [[ "$ceiling" != "bypassPermissions" ]]; then
+            log "  To allow bypassPermissions turns: sudo darjeeling config set permission-ceiling bypassPermissions && sudo systemctl restart darjeeling.service"
         fi
         if [[ -n "$legacy_vault" ]]; then
-            if grep -q "^DARJEELING_VAULT_PATH=" "$env_file"; then
-                sed -i "s|^DARJEELING_VAULT_PATH=.*|DARJEELING_VAULT_PATH=${legacy_vault}|" "$env_file"
-            else
-                echo "DARJEELING_VAULT_PATH=${legacy_vault}" >> "$env_file"
-            fi
-        fi
-        if [[ -n "$legacy_deepseek" ]]; then
-            if grep -q "^DEEPSEEK_API_KEY=" "$env_file"; then
-                sed -i "s|^DEEPSEEK_API_KEY=.*|DEEPSEEK_API_KEY=${legacy_deepseek}|" "$env_file"
-            else
-                echo "DEEPSEEK_API_KEY=${legacy_deepseek}" >> "$env_file"
-            fi
+            set_env_var DARJEELING_VAULT "$legacy_vault" "$env_file"
+            # 1.0.3 and earlier wrote a key the server never read.
+            unset_env_var DARJEELING_VAULT_PATH "$env_file"
         fi
         chown "root:${SERVICE_USER}" "$env_file"
         chmod 0640 "$env_file"
@@ -716,9 +818,29 @@ with open('${dev_file}', 'w') as f:
         log "Existing configuration preserved at ${env_file}."
     fi
 
-    # 8. Claude Code Native Install (INST-10, QA-14)
+    # DeepSeek API key: the server reads ${STATE_ROOT}/secrets/deepseek_api_key
+    # first and only falls back to DEEPSEEK_API_KEY in the environment, so keep
+    # secrets out of the env file.
+    local secrets_dir="${STATE_ROOT}/secrets"
+    local deepseek_secret="${secrets_dir}/deepseek_api_key"
+    local env_deepseek=""
+    env_deepseek="$(get_env_var DEEPSEEK_API_KEY "$env_file")"
+    local deepseek_value="${legacy_deepseek:-$env_deepseek}"
+    if [[ -n "$deepseek_value" && ! -s "$deepseek_secret" ]]; then
+        install -d -m 0700 -o "$SERVICE_USER" -g "$SERVICE_USER" "$secrets_dir"
+        ( umask 077; printf '%s\n' "$deepseek_value" > "$deepseek_secret" )
+        chown "$SERVICE_USER:$SERVICE_USER" "$deepseek_secret"
+        chmod 0600 "$deepseek_secret"
+        log "DeepSeek API key stored at ${deepseek_secret} (0600)."
+    fi
+    if [[ -n "$env_deepseek" && -s "$deepseek_secret" ]]; then
+        unset_env_var DEEPSEEK_API_KEY "$env_file"
+        log "Moved DEEPSEEK_API_KEY out of ${env_file} into ${deepseek_secret}."
+    fi
+
+    # 8. Claude Code Native Install
     if [[ "$CLAUDE_MODE" == "native" ]]; then
-        local claude_bin="/var/lib/darjeeling/.local/bin/claude"
+        local claude_bin="${user_home}/.local/bin/claude"
         if runuser -u "$SERVICE_USER" -- which claude >/dev/null 2>&1; then
             log "Claude Code already installed for ${SERVICE_USER}; skipping install."
         elif [[ ! -x "$claude_bin" ]]; then
@@ -735,8 +857,8 @@ with open('${dev_file}', 'w') as f:
         fi
     fi
 
-    # ADR-25: Root-owned Claude Code managed settings
-    log "Configuring Claude Code managed settings (ADR-25)..."
+    # Root-owned Claude Code managed settings
+    log "Configuring Claude Code managed settings..."
     mkdir -p /etc/claude-code
     cat << 'EOF' > /etc/claude-code/managed-settings.json
 {
@@ -761,7 +883,7 @@ EOF
         sh <(curl -sSf https://downloads.nordcdn.com/apps/linux/install.sh) -n 2>/dev/null || true
     fi
 
-    # 9. Laptop Profile (INST-08, INST-24, SRV-23, SRV-27, QA-17)
+    # 9. Laptop Profile
     if [[ "$LAPTOP_PROFILE" == "true" ]]; then
         log "Configuring laptop profile..."
         # 1. Lid switch handling
@@ -774,7 +896,7 @@ HandleLidSwitchDocked=ignore
 EOF
         systemctl kill -s HUP systemd-logind 2>/dev/null || true
 
-        # 2. Battery threshold control udev rules (INST-24, SRV-23)
+        # 2. Battery threshold control udev rules
         if [[ -f "$release_dir/udev/99-darjeeling-battery.rules" ]]; then
             mkdir -p /etc/udev/rules.d
             cp "$release_dir/udev/99-darjeeling-battery.rules" /etc/udev/rules.d/
@@ -786,7 +908,7 @@ EOF
         fi
     fi
 
-    # 10. Install and Start Systemd Units (INST-05, INST-07)
+    # 10. Install and Start Systemd Units
     log "Configuring systemd service units..."
     local tmux_unit="/etc/systemd/system/darjeeling-tmux.service"
     local srv_unit="/etc/systemd/system/darjeeling.service"
@@ -794,15 +916,15 @@ EOF
     cp "$release_dir/units/darjeeling-tmux.service" "$tmux_unit"
     cp "$release_dir/units/darjeeling.service" "$srv_unit"
 
-    local user_home
-    user_home="$(getent passwd "$SERVICE_USER" 2>/dev/null | cut -d: -f6 || echo "")"
-    if [[ -z "$user_home" || ! -d "$user_home" ]]; then
-        user_home="/home/${SERVICE_USER}"
-    fi
-
     if [[ "$SERVICE_USER" != "darjeeling" ]]; then
         sed -i "s|User=darjeeling|User=${SERVICE_USER}|g" "$tmux_unit" "$srv_unit"
-        sed -i "s|HOME=/home/darjeeling|HOME=${user_home}|g" "$tmux_unit" "$srv_unit"
+    fi
+    # HOME must be the service user's real home directory (the units ship with
+    # the default /var/lib/darjeeling).
+    if [[ "$user_home" != "$STATE_ROOT" ]]; then
+        sed -i -e "s|Environment=HOME=${STATE_ROOT} |Environment=HOME=${user_home} |" \
+               -e "s|Environment=PATH=${STATE_ROOT}/.local/bin:|Environment=PATH=${user_home}/.local/bin:|" \
+               "$tmux_unit" "$srv_unit"
     fi
 
     if [[ "$VAULT_SYNC" == "obsidian-sync" && -f "$release_dir/units/darjeeling-vault-sync.service" ]]; then
@@ -861,7 +983,7 @@ EOF
         fi
     fi
 
-    # 11. Health endpoint poll (INST-34)
+    # 11. Health endpoint poll
     log "Polling http://127.0.0.1:${PORT}/health for readiness..."
     local healthy=false
     for _ in $(seq 1 15); do
@@ -880,14 +1002,28 @@ EOF
         echo "=========================================================="
         echo "Endpoint:    http://${bind_ip}:${PORT}"
         echo "Config:      /etc/darjeeling/darjeeling.env"
-        echo "Token path:  /var/lib/darjeeling/.token"
+        echo "Version:     ${DJ_VERSION}"
+        echo "Token path:  ${STATE_ROOT}/.token"
         echo ""
         echo "--- Pairing Instructions ---"
-        "$release_dir/venv/bin/python" -m darjeeling_server.cli pair --state-dir "/var/lib/darjeeling" 2>/dev/null || true
+        # Run as the service user so pairing.json stays readable by the server.
+        # Pass the state dir and token path up front: the package reads its
+        # configuration at import time, before the CLI loads the env file.
+        local pair_tokfile
+        pair_tokfile="$(get_env_var DARJEELING_TOKEN_FILE "$env_file")"
+        if ! (cd / && runuser -u "$SERVICE_USER" -- env DARJEELING_ENV="$env_file" \
+                DARJEELING_STATE_DIR="$STATE_ROOT" DARJEELING_TOKEN_FILE="${pair_tokfile:-${STATE_ROOT}/.token}" \
+                "$release_dir/venv/bin/python" -m darjeeling_server.cli pair --state-dir "$STATE_ROOT"); then
+            warn "Could not create a pairing code. Run later: sudo darjeeling pair"
+        fi
         echo ""
         echo "--- Agent Authentication ---"
         echo "Log in Claude Code for the service user:"
-        echo "  sudo runuser -u ${SERVICE_USER} -- claude login"
+        if runuser -u "$SERVICE_USER" -- sh -c 'command -v claude' >/dev/null 2>&1; then
+            echo "  sudo runuser -u ${SERVICE_USER} -- claude login"
+        else
+            echo "  sudo runuser -u ${SERVICE_USER} -- ${user_home}/.local/bin/claude login"
+        fi
         echo ""
         echo "--- Vault Sync ---"
         local v_path="/var/lib/darjeeling/vault"

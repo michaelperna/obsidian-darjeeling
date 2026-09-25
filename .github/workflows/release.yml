@@ -46,7 +46,7 @@ jobs:
           pyflakes server/
           pytest -v tests/server/
 
-      - name: Verify tag matches manifest and versions.json
+      - name: Verify tag matches manifest, versions.json and server/VERSION
         run: |
           TAG="${GITHUB_REF_NAME}"
           MANIFEST=$(node -p "require('./manifest.json').version")
@@ -61,31 +61,62 @@ jobs:
               process.exit(1);
             }
           "
+          SERVER_VERSION="$(tr -d '[:space:]' < server/VERSION)"
+          if [ "$SERVER_VERSION" != "$TAG" ]; then
+            echo "FAIL: server/VERSION ($SERVER_VERSION) does not match release tag ($TAG)"
+            exit 1
+          fi
 
-      - name: Build server tarball and stamp installer
+      - name: Build server tarball and stamp installer (reproducible)
         run: |
-          ./scripts/release/build-server-tarball.sh "${GITHUB_REF_NAME}"
+          TAG="${GITHUB_REF_NAME}"
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          ./scripts/release/build-server-tarball.sh "$TAG"
+          FIRST="$(sha256sum "dist/darjeeling-server-${TAG}.tar.gz" | awk '{print $1}')"
+          # Build again from the same commit; the bytes must not change.
+          ./scripts/release/build-server-tarball.sh "$TAG"
+          SECOND="$(sha256sum "dist/darjeeling-server-${TAG}.tar.gz" | awk '{print $1}')"
+          if [ "$FIRST" != "$SECOND" ]; then
+            echo "FAIL: server tarball is not reproducible ($FIRST != $SECOND)"
+            exit 1
+          fi
+          grep -q "^DJ_VERSION=\"${TAG}\"$" dist/install.sh
+          grep -q "^TARBALL_SHA256=\"${SECOND}\"$" dist/install.sh
+          tar -xzOf "dist/darjeeling-server-${TAG}.tar.gz" VERSION | grep -qx "${TAG}"
 
-      - name: Generate SHA256SUMS
+      - name: Stage release assets and generate SHA256SUMS
         run: |
-          cd dist
-          sha256sum ../main.js ../manifest.json ../styles.css "darjeeling-server-${GITHUB_REF_NAME}.tar.gz" install.sh > SHA256SUMS
-          cd ..
+          TAG="${GITHUB_REF_NAME}"
+          rm -rf release-assets
+          mkdir release-assets
+          # Obsidian installs plugins from these three files at the release root.
+          cp main.js manifest.json styles.css release-assets/
+          cp "dist/darjeeling-server-${TAG}.tar.gz" dist/install.sh release-assets/
+          cd release-assets
+          sha256sum main.js manifest.json styles.css "darjeeling-server-${TAG}.tar.gz" install.sh > SHA256SUMS
+          cat SHA256SUMS
+          sha256sum -c SHA256SUMS
 
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@c074443f1aee8d4aeeae555aebba3282517141b2 # v2.2.3
         with:
           subject-path: |
-            main.js
-            manifest.json
-            styles.css
+            release-assets/main.js
+            release-assets/manifest.json
+            release-assets/styles.css
+            release-assets/darjeeling-server-${{ github.ref_name }}.tar.gz
+            release-assets/install.sh
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
         with:
           draft: false
           files: |
-            main.js
-            manifest.json
-            styles.css
+            release-assets/main.js
+            release-assets/manifest.json
+            release-assets/styles.css
+            release-assets/darjeeling-server-${{ github.ref_name }}.tar.gz
+            release-assets/install.sh
+            release-assets/SHA256SUMS
+          fail_on_unmatched_files: true
           generate_release_notes: true

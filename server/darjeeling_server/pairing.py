@@ -1,5 +1,9 @@
 """
-Pairing and device token management (ADR-12, PRD 1.8, G-31, G-35, INST-26).
+Pairing and device token management.
+
+Pairing codes are 8 digits, single use, stored hashed, and valid for 10 minutes.
+Failed claims are rate limited per client address (and with a looser global
+cap); a wrong guess never burns other people's live codes.
 """
 
 import hashlib
@@ -15,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from darjeeling_server.auth import close_device_sockets, require_auth
@@ -26,13 +30,66 @@ log = logging.getLogger("darjeeling.pairing")
 DEVICES_FILE = STATE_DIR / "devices.json"
 PAIRING_FILE = STATE_DIR / "pairing.json"
 CODE_TTL_SECONDS = 600  # 10 minutes
-MAX_FAILED_ATTEMPTS = 5
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return max(1, int(os.environ.get(name, str(default))))
+    except ValueError:
+        return default
+
+
+# Failed claims allowed per client address inside FAILURE_WINDOW_SECONDS.
+MAX_FAILURES_PER_CLIENT = _env_int("DARJEELING_PAIR_MAX_FAILURES_PER_CLIENT", 10)
+# Failed claims allowed across all clients inside FAILURE_WINDOW_SECONDS.
+MAX_FAILURES_GLOBAL = _env_int("DARJEELING_PAIR_MAX_FAILURES_GLOBAL", 100)
+FAILURE_WINDOW_SECONDS = _env_int("DARJEELING_PAIR_FAILURE_WINDOW", CODE_TTL_SECONDS)
 
 router = APIRouter(tags=["pairing"])
 
-# Global backoff state (G-35)
-_last_failure_time: float = 0.0
-_consecutive_failures: int = 0
+# client address -> timestamps of recent failed claims
+_failures: Dict[str, List[float]] = {}
+
+
+def _prune_failures(now: float) -> None:
+    cutoff = now - FAILURE_WINDOW_SECONDS
+    for key in list(_failures.keys()):
+        recent = [t for t in _failures[key] if t > cutoff]
+        if recent:
+            _failures[key] = recent
+        else:
+            del _failures[key]
+
+
+def _global_failures() -> int:
+    return sum(len(v) for v in _failures.values())
+
+
+def _record_failure(client: str, now: float) -> None:
+    _failures.setdefault(client, []).append(now)
+
+
+def reset_rate_limits() -> None:
+    """Clear failed-claim counters (used by tests and on restart)."""
+    _failures.clear()
+
+
+def _client_key(request: Optional[Request]) -> str:
+    """Best-effort client address for rate limiting.
+
+    When the direct peer is loopback (Tailscale Serve or another local reverse
+    proxy), use the right-most X-Forwarded-For entry, which is the one the
+    proxy appended. Headers from non-loopback peers are ignored.
+    """
+    if request is None or request.client is None:
+        return "unknown"
+    peer = request.client.host or "unknown"
+    if peer in ("127.0.0.1", "::1", "localhost"):
+        fwd = request.headers.get("x-forwarded-for", "")
+        parts = [p.strip() for p in fwd.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
+    return peer
 
 
 def _atomic_write_json(path: Path, data: Any) -> None:
@@ -119,6 +176,24 @@ def load_pairing_codes() -> List[Dict[str, Any]]:
     try:
         with open(PAIRING_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
+    except PermissionError as e:
+        try:
+            st = PAIRING_FILE.stat()
+            owner = f"uid={st.st_uid} gid={st.st_gid} mode={oct(st.st_mode & 0o777)}"
+        except OSError:
+            owner = "unknown owner"
+        log.error(
+            "Cannot read pairing file %s (%s; running as uid=%s): %s. "
+            "Codes created by another user cannot be claimed. Fix ownership with: "
+            "sudo chown <service-user>: %s  (or create codes with `sudo darjeeling pair`, "
+            "which runs as the service user).",
+            PAIRING_FILE,
+            owner,
+            os.getuid() if hasattr(os, "getuid") else "?",
+            e,
+            PAIRING_FILE,
+        )
+        return []
     except Exception as e:
         log.warning("Could not read pairing file %s: %s", PAIRING_FILE, e)
         return []
@@ -228,23 +303,33 @@ class PairRequest(BaseModel):
 
 
 @router.post("/api/pair")
-async def pair_endpoint(req: PairRequest):
+async def pair_endpoint(req: PairRequest, request: Request):
     """
-    Unauthenticated, code-gated device pairing (ADR-12, PRD 1.8).
+    Unauthenticated, code-gated device pairing.
     Returns {token, device_id, server_name, api}.
     """
-    global _last_failure_time, _consecutive_failures
-
     now = time.time()
-    if _consecutive_failures >= 10 and (now - _last_failure_time) < 2.0:
+    client = _client_key(request)
+    _prune_failures(now)
+
+    if len(_failures.get(client, [])) >= MAX_FAILURES_PER_CLIENT:
+        log.warning("Pairing: client %s is rate limited after repeated failures", client)
         raise HTTPException(
-            status_code=429, detail="Too many failed pairing attempts. Please wait."
+            status_code=429,
+            detail="Too many failed pairing attempts. Please wait and try again.",
+            headers={"Retry-After": str(FAILURE_WINDOW_SECONDS)},
+        )
+    if _global_failures() >= MAX_FAILURES_GLOBAL:
+        log.warning("Pairing: global failed-claim limit reached; refusing claims for now")
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed pairing attempts. Please wait and try again.",
+            headers={"Retry-After": str(FAILURE_WINDOW_SECONDS)},
         )
 
     raw_code = re.sub(r"[\s\-]", "", req.code.strip())
     if not (len(raw_code) == 8 and raw_code.isdigit()):
-        _consecutive_failures += 1
-        _last_failure_time = now
+        _record_failure(client, now)
         raise HTTPException(
             status_code=401, detail="Invalid pairing code format; must be 8 digits"
         )
@@ -258,27 +343,19 @@ async def pair_endpoint(req: PairRequest):
             continue
         if (now - c.get("created_at", 0)) > CODE_TTL_SECONDS:
             continue
-        if c.get("attempts", 0) >= MAX_FAILED_ATTEMPTS:
-            continue
-
         if secrets.compare_digest(candidate_hash, c.get("code_hash", "")):
             matched_idx = i
             break
 
     if matched_idx is None:
-        for c in codes:
-            if not c.get("burned") and (now - c.get("created_at", 0)) <= CODE_TTL_SECONDS:
-                c["attempts"] = c.get("attempts", 0) + 1
-                if c["attempts"] >= MAX_FAILED_ATTEMPTS:
-                    c["burned"] = True
-        save_pairing_codes(codes)
-        _consecutive_failures += 1
-        _last_failure_time = now
+        # A wrong guess cannot be attributed to a particular code, so it only
+        # counts against the caller's address; other users' codes stay live.
+        _record_failure(client, now)
         raise HTTPException(status_code=401, detail="Invalid or expired pairing code")
 
     codes[matched_idx]["burned"] = True
     save_pairing_codes(codes)
-    _consecutive_failures = 0
+    _failures.pop(client, None)
 
     token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
