@@ -22,11 +22,11 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from darjeeling_server.agents import AGENTS
 from darjeeling_server.agents.agy import normalize_agy_event
-from darjeeling_server.agents.base import AgentSpec, is_uuid
+from darjeeling_server.agents.base import AgentSpec, is_safe_resume_id, is_uuid
 from darjeeling_server.auth import require_auth, unregister_ws, ws_auth
 from darjeeling_server.config import (
     MAX_CONCURRENT_TURNS,
@@ -78,11 +78,17 @@ class TurnRequest(BaseModel):
 
     @field_validator("resume", "session_id", mode="before")
     @classmethod
-    def _uuid_session(cls, v: Any) -> Any:
+    def _uuid_session(cls, v: Any, info: ValidationInfo) -> Any:
         # Session ids reach agent argv (--resume/--session-id/--conversation);
         # only UUIDs are accepted so a value can never be read as a flag.
+        # agy does not document its conversation id format, so it gets a
+        # conservative token (no leading '-', no '/', no whitespace).
         if v is None or v == "":
             return None
+        if (info.data or {}).get("agent") == "agy":
+            if not is_safe_resume_id(v):
+                raise ValueError("must be a safe session id (letters, digits, _ . : -; no leading '-')")
+            return v
         if not isinstance(v, str) or not is_uuid(v):
             raise ValueError("must be a UUID")
         return v
