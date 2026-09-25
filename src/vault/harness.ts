@@ -28,9 +28,15 @@ export class VaultHarness {
     let harnessContent = "";
     let source: "DARJEELING.md" | "CLAUDE.md" | "none" | "fallback" = "fallback";
 
-    // ADR-14: DARJEELING.md is sent to direct providers only when the user opts in (vaultContext === "instructions").
-    // CLAUDE.md is never read for third-party APIs (CLI agents read it themselves).
-    if (this.settings.vaultContext === "instructions") {
+    // ADR-14: DARJEELING.md goes to direct (cloud) provider APIs only when the
+    // user opts in (vaultContext === "instructions"; the default is "none").
+    // CLI runtimes (local / remote host) always get it. CLAUDE.md is never
+    // read for direct APIs; CLI agents fall back to it when DARJEELING.md is
+    // missing.
+    const sendInstructions = effectiveDirectApi
+      ? this.settings.vaultContext === "instructions"
+      : true;
+    if (sendInstructions) {
       const instructionsPath = this.settings.instructionsFile || "DARJEELING.md";
       const instructionFile = this.app.vault.getAbstractFileByPath(instructionsPath);
       if (instructionFile instanceof TFile) {
@@ -42,7 +48,6 @@ export class VaultHarness {
         }
       }
 
-      // CLAUDE.md is ONLY checked for non-direct-api runs if DARJEELING.md was not found
       if (!harnessContent && !effectiveDirectApi) {
         const claudeFile = this.app.vault.getAbstractFileByPath("CLAUDE.md");
         if (claudeFile instanceof TFile) {

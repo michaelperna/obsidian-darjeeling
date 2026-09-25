@@ -88,6 +88,10 @@ export interface DarjeelingSettings {
   // Context & Privacy (ADR-14)
   attachActiveNote: boolean;
   includeLinkedNotes?: boolean;
+  /**
+   * DARJEELING.md for direct (cloud) provider APIs. Opt-in: "none" by
+   * default. CLI runtimes (local/remote) always get the vault instructions.
+   */
   vaultContext: "none" | "instructions";
   sendNoteListing: boolean;
   instructionsFile: string;
@@ -203,7 +207,7 @@ export function createDefaultSettings(): DarjeelingSettings {
     defaultPermissionMode: "plan",
     attachActiveNote: true,
     includeLinkedNotes: false,
-    vaultContext: "instructions",
+    vaultContext: "none",
     sendNoteListing: false,
     instructionsFile: "DARJEELING.md",
     appendSystemPrompt: "",
@@ -333,7 +337,7 @@ export function validateSettings(settings: unknown): DarjeelingSettings {
     validated.vaultContext !== "none" &&
     validated.vaultContext !== "instructions"
   ) {
-    validated.vaultContext = "instructions";
+    validated.vaultContext = "none";
   }
 
   if (!validated.artifactFolder || !validated.artifactFolder.trim()) {

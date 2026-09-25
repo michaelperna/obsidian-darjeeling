@@ -29,7 +29,7 @@ test("DEFAULT_SETTINGS has zero owner-specific literals and safe privacy default
   assert.equal(DEFAULT_SETTINGS.artifactFolder, "Darjeeling");
   assert.equal(DEFAULT_SETTINGS.permissionMode, "plan");
   assert.equal(DEFAULT_SETTINGS.defaultPermissionMode, "plan");
-  assert.equal(DEFAULT_SETTINGS.vaultContext, "instructions");
+  assert.equal(DEFAULT_SETTINGS.vaultContext, "none");
   assert.equal(DEFAULT_SETTINGS.sendNoteListing, false);
   assert.equal(DEFAULT_SETTINGS.meshnetHost, "");
   assert.deepEqual(DEFAULT_SETTINGS.hosts, []);
@@ -69,9 +69,9 @@ test("validateSettings enforces schema constraints and resets unsafe permissions
   });
   assert.equal(badProv.activeProvider, "gemini");
 
-  // Invalid vaultContext falls back to default ("instructions")
+  // Invalid vaultContext falls back to default ("none": opt-in only)
   const badContext = validateSettings({
     vaultContext: "invalid-context",
   });
-  assert.equal(badContext.vaultContext, "instructions");
+  assert.equal(badContext.vaultContext, "none");
 });

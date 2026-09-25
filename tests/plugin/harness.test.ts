@@ -76,3 +76,22 @@ test("ADR-14: Opting into instructions includes DARJEELING.md", async () => {
   assert.equal(result.source, "DARJEELING.md");
   assert.ok(result.systemPrompt.includes("Custom vault documentation instructions"));
 });
+
+test("ADR-14: DARJEELING.md is NOT sent to direct providers by default (opt-in only)", async () => {
+  const app = createMockApp({ "DARJEELING.md": "PRIVATE_VAULT_INSTRUCTIONS" });
+  const settings = { ...DEFAULT_SETTINGS, runtimeMode: "direct-api" as const };
+  assert.equal(settings.vaultContext, "none");
+
+  const result = await new VaultHarness(app, settings).loadHarness(undefined, true);
+  assert.equal(result.source, "none");
+  assert.ok(!result.systemPrompt.includes("PRIVATE_VAULT_INSTRUCTIONS"));
+});
+
+test("ADR-14: CLI runtimes still receive DARJEELING.md with default settings", async () => {
+  const app = createMockApp({ "DARJEELING.md": "CLI vault instructions" });
+  const settings = { ...DEFAULT_SETTINGS, runtimeMode: "remote" as const };
+
+  const result = await new VaultHarness(app, settings).loadHarness(undefined, false);
+  assert.equal(result.source, "DARJEELING.md");
+  assert.ok(result.systemPrompt.includes("CLI vault instructions"));
+});
