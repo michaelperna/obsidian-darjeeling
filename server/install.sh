@@ -96,6 +96,179 @@ get_env_var() {
     K="$key" awk 'BEGIN { k = ENVIRON["K"] } index($0, k "=") == 1 { v = substr($0, length(k) + 2) } END { gsub(/^["\x27]|["\x27]$/, "", v); print v }' "$file"
 }
 
+# Yes/no question on the terminal. With --yes, or without a terminal, the
+# default answer is used. Usage: prompt_yes_no "Question?" y|n
+prompt_yes_no() {
+    local question="$1" default="$2" answer=""
+    if [[ "$NON_INTERACTIVE" == "true" ]] || ! { : < /dev/tty; } 2>/dev/null; then
+        [[ "$default" == "y" ]]
+        return
+    fi
+    local hint="[y/N]"
+    [[ "$default" == "y" ]] && hint="[Y/n]"
+    printf '%s %s ' "$question" "$hint" > /dev/tty
+    read -r answer < /dev/tty || answer=""
+    answer="${answer:-$default}"
+    [[ "$answer" == [Yy]* ]]
+}
+
+# Bare address of a DARJEELING_BIND / DARJEELING_HOST value ("address:" and
+# brackets removed). interface:/loopback values are returned unchanged.
+bind_spec_address() {
+    local v="$1"
+    v="${v#address:}"
+    v="${v#[}"
+    v="${v%]}"
+    printf '%s\n' "$v"
+}
+
+# True for the binds 1.0.4 refuses at startup that 1.0.3 accepted:
+# unspecified (0.0.0.0, ::) and link-local addresses.
+is_wildcard_bind() {
+    local a
+    a="$(bind_spec_address "$1")"
+    case "$a" in
+        0.0.0.0|::|::0|0:0:0:0:0:0:0:0|::ffff:0.0.0.0|169.254.*|[Ff][Ee]80:*) return 0 ;;
+    esac
+    return 1
+}
+
+# IPv4 addresses on overlay interfaces (Tailscale, NordVPN Meshnet), one per line.
+list_overlay_addresses() {
+    local iface addr
+    for iface in tailscale0 nordlynx; do
+        addr="$(ip -4 addr show dev "$iface" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1 || true)"
+        if [[ -n "$addr" ]]; then
+            printf '%s\n' "$addr"
+        fi
+    done
+}
+
+# Upgrade guard for 1.0.3 hosts bound to 0.0.0.0 / :: (refused by 1.0.4 at
+# startup, which would leave the host unreachable). Runs before anything is
+# changed. Sets PENDING_BIND_VALUE when the env file must be rewritten, or
+# stops with instructions. Choice order: --bind, --network <mode>, the single
+# overlay address (automatic with --yes, asked otherwise).
+PENDING_BIND_VALUE=""
+PENDING_BIND_FROM=""
+check_existing_bind() {
+    local env_file="$1"
+    [[ -r "$env_file" ]] || return 0
+    local key="DARJEELING_BIND" val
+    val="$(get_env_var DARJEELING_BIND "$env_file")"
+    if [[ -z "$val" ]]; then
+        key="DARJEELING_HOST"
+        val="$(get_env_var DARJEELING_HOST "$env_file")"
+    fi
+    if [[ -z "$val" ]] || ! is_wildcard_bind "$val"; then
+        return 0
+    fi
+    warn "${env_file} has ${key}=${val}. Darjeeling 1.0.4 refuses to listen on every interface and would not start."
+
+    local choice="" overlays="" count=0
+    if [[ -n "$BIND_IP" ]]; then
+        choice="$BIND_IP"
+    elif [[ "$NETWORK_MODE" != "auto" ]]; then
+        choice="$(detect_network "$NETWORK_MODE")"
+    else
+        overlays="$(list_overlay_addresses)"
+        count="$(printf '%s' "$overlays" | grep -c . || true)"
+        if [[ "$count" -eq 1 ]]; then
+            if prompt_yes_no "Bind to the overlay address ${overlays} instead?" y; then
+                choice="$overlays"
+            fi
+        fi
+    fi
+
+    if [[ -n "$choice" ]] && is_wildcard_bind "$choice"; then
+        err "--bind ${choice} is refused by 1.0.4 as well."
+        choice=""
+    fi
+    if [[ -z "$choice" ]]; then
+        err "Choose the address the server should listen on, then re-run the installer:"
+        {
+            if [[ -n "$overlays" ]]; then
+                echo "  Overlay addresses on this host:"
+                printf '%s\n' "$overlays" | sed 's/^/    /'
+            fi
+            echo "  --bind <ip>            listen on one address (e.g. your Tailscale/Meshnet IP)"
+            echo "  --network meshnet      NordVPN Meshnet (nordlynx address)"
+            echo "  --network wireguard    WireGuard (wg0 address)"
+            echo "  --network lan          this host's LAN address"
+            echo "  --network loopback     127.0.0.1 only (Tailscale Serve or SSH forwarding)"
+            echo "  --network tailscale    127.0.0.1 behind Tailscale Serve"
+            echo "Or edit ${env_file} yourself: DARJEELING_BIND=interface:tailscale0,"
+            echo "DARJEELING_BIND=address:<ip> or DARJEELING_BIND=loopback."
+        } >&2
+        exit 4
+    fi
+    PENDING_BIND_VALUE="$choice"
+    PENDING_BIND_FROM="${key}=${val}"
+}
+
+# Apply the decision made by check_existing_bind to the env file.
+apply_pending_bind() {
+    local env_file="$1"
+    [[ -n "$PENDING_BIND_VALUE" ]] || return 0
+    set_env_var DARJEELING_BIND "$PENDING_BIND_VALUE" "$env_file"
+    local host
+    host="$(get_env_var DARJEELING_HOST "$env_file")"
+    if [[ -n "$host" ]] && is_wildcard_bind "$host"; then
+        unset_env_var DARJEELING_HOST "$env_file"
+    fi
+    log "Rewrote ${PENDING_BIND_FROM} to DARJEELING_BIND=${PENDING_BIND_VALUE} in ${env_file}."
+}
+
+# Address to report and health-check for an existing env file's bind.
+env_bind_ip() {
+    local env_file="$1" val
+    val="$(get_env_var DARJEELING_BIND "$env_file")"
+    [[ -n "$val" ]] || val="$(get_env_var DARJEELING_HOST "$env_file")"
+    case "$val" in
+        ""|loopback|localhost) echo "127.0.0.1" ;;
+        interface:*)
+            local ifip
+            ifip="$(ip -4 addr show dev "${val#interface:}" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1 || true)"
+            echo "${ifip:-127.0.0.1}"
+            ;;
+        *) bind_spec_address "$val" ;;
+    esac
+}
+
+# Hosts migrated from 4.1.0 by the 1.0.3 (or earlier) installer had their
+# permission ceiling forced to bypassPermissions. The value is kept (it may be
+# the user's choice by now), but it is flagged until someone confirms it.
+# Usage: review_forced_ceiling <env_file> <marker_file>
+review_forced_ceiling() {
+    local env_file="$1" marker="$2"
+    {
+        echo ""
+        echo "=========================================================="
+        echo "WARNING: permission ceiling is bypassPermissions"
+        echo "=========================================================="
+        echo "This host was migrated from Darjeeling 4.1.0 by the 1.0.3 (or older)"
+        echo "installer, which set the permission ceiling to bypassPermissions"
+        echo "without asking. At that ceiling any paired client can run tools and"
+        echo "shell commands on this host without confirmation."
+        echo ""
+        echo "The installer keeps your current value. To lower it:"
+        echo "  sudo darjeeling config set permission-ceiling acceptEdits"
+        echo "  sudo systemctl restart darjeeling.service"
+        echo "=========================================================="
+    } >&2
+    if [[ "$NON_INTERACTIVE" == "true" ]] || ! { : < /dev/tty; } 2>/dev/null; then
+        warn "Keeping bypassPermissions (--yes). Re-run the installer interactively once to confirm and silence this warning."
+        return 0
+    fi
+    if prompt_yes_no "Keep bypassPermissions?" y; then
+        log "Keeping permission ceiling bypassPermissions (confirmed)."
+    else
+        set_env_var DARJEELING_PERMISSION_CEILING acceptEdits "$env_file"
+        log "Lowered DARJEELING_PERMISSION_CEILING to acceptEdits."
+    fi
+    echo "ceiling-reviewed: yes" >> "$marker"
+}
+
 usage() {
     cat << 'EOF'
 Usage: sudo bash install.sh [options]
@@ -247,7 +420,7 @@ run_uninstall() {
     rm -f /usr/local/bin/darjeeling
     # Only remove what the installer created under /opt/darjeeling. Anything
     # else there (for example a git checkout) is left untouched.
-    rm -f /opt/darjeeling/current
+    rm -f /opt/darjeeling/current /opt/darjeeling/previous
     rm -rf /opt/darjeeling/releases /opt/darjeeling/backups
     rmdir /opt/darjeeling 2>/dev/null || true
     if [[ -d /opt/darjeeling ]]; then
@@ -476,8 +649,19 @@ main() {
     local max_concurrent_turns
     max_concurrent_turns="$(run_preflight)"
 
+    # Upgrading a host bound to 0.0.0.0 / ::? Decide the new bind before
+    # changing anything (exits with instructions when there is no safe choice).
+    local existing_env="/etc/darjeeling/darjeeling.env"
+    check_existing_bind "$existing_env"
+
     local bind_ip
-    bind_ip="$(detect_network "$NETWORK_MODE")"
+    if [[ -r "$existing_env" && -z "$BIND_IP" && "$NETWORK_MODE" == "auto" ]]; then
+        # Re-run / upgrade: the existing env file's bind is kept, so report
+        # and health-check that instead of requiring a detectable overlay.
+        bind_ip="${PENDING_BIND_VALUE:-$(env_bind_ip "$existing_env")}"
+    else
+        bind_ip="$(detect_network "$NETWORK_MODE")"
+    fi
 
     local ts_serve_port=443
     if command -v ss >/dev/null 2>&1 && ss -tulpn 2>/dev/null | grep -q ":443 "; then
@@ -529,6 +713,8 @@ EOF
     local legacy_vault=""
     local legacy_deepseek=""
     local legacy_ceiling=""
+    local legacy_marker=""
+    local ceiling_forced_by_old=false
 
     for cand in "/home/${SERVICE_USER}/darjeeling-server/config.env" /home/*/darjeeling-server/config.env; do
         if [[ -f "$cand" ]]; then
@@ -559,7 +745,8 @@ EOF
             fi
         fi
 
-        if [[ -f /etc/systemd/system/darjeeling.service ]]; then
+        # Back up the 4.1.0 unit once; on re-runs the installed unit is ours.
+        if [[ -f /etc/systemd/system/darjeeling.service && ! -f /opt/darjeeling/backups/legacy-4.1.0/darjeeling.service ]]; then
             mkdir -p "/opt/darjeeling/backups/legacy-4.1.0"
             cp -p /etc/systemd/system/darjeeling.service "/opt/darjeeling/backups/legacy-4.1.0/darjeeling.service"
             log "Backed up legacy unit to /opt/darjeeling/backups/legacy-4.1.0/darjeeling.service"
@@ -571,11 +758,28 @@ EOF
 Environment="PATH=/usr/local/bin:/usr/bin:/bin:/home/${SERVICE_USER}/.bun/bin:/home/${SERVICE_USER}/.npm-global/bin:/home/${SERVICE_USER}/.local/bin"
 EOF
 
-        cat << EOF > "${legacy_dir}/MIGRATED_TO_V1.txt"
+        # The marker 1.0.3 and earlier left has no "ceiling-policy" line; those
+        # installers forced the ceiling to bypassPermissions. Keep that fact
+        # in the marker so later runs still know about it.
+        legacy_marker="${legacy_dir}/MIGRATED_TO_V1.txt"
+        if [[ -f "$legacy_marker" ]]; then
+            if grep -q '^ceiling-forced-by-1.0.3: yes' "$legacy_marker"; then
+                ceiling_forced_by_old=true
+            elif ! grep -q '^ceiling-policy: preserve' "$legacy_marker"; then
+                ceiling_forced_by_old=true
+                printf '%s\n' "ceiling-forced-by-1.0.3: yes" "ceiling-policy: preserve" >> "$legacy_marker"
+            fi
+            if grep -q '^ceiling-reviewed: yes' "$legacy_marker"; then
+                ceiling_forced_by_old=false
+            fi
+        else
+            cat << EOF > "$legacy_marker"
 This Darjeeling 4.1.0 installation has been migrated to Project Darjeeling ${DJ_VERSION}.
 Managed configuration is now located at /etc/darjeeling/darjeeling.env
 Server daemon is managed under /opt/darjeeling/current
+ceiling-policy: preserve
 EOF
+        fi
     fi
 
     # 1. Create or verify dedicated service user
@@ -612,6 +816,18 @@ EOF
     # 3. Create directory tree
     log "Setting up directory structure under /opt/darjeeling and /var/lib/darjeeling..."
     local release_dir="/opt/darjeeling/releases/${DJ_VERSION}"
+    # The release that is live now: kept untouched as the rollback target.
+    local prev_release=""
+    prev_release="$(readlink -f /opt/darjeeling/current 2>/dev/null || true)"
+    if [[ -d "$release_dir" ]]; then
+        if [[ -n "$prev_release" && "$(readlink -f "$release_dir")" == "$prev_release" ]]; then
+            log "Reinstalling ${DJ_VERSION} in place (it is the current release)."
+            prev_release=""
+        else
+            log "Replacing stale ${release_dir} (not the current release)."
+            rm -rf "$release_dir"
+        fi
+    fi
     mkdir -p "$release_dir"
     mkdir -p "/etc/darjeeling"
     mkdir -p "/var/lib/darjeeling/run"
@@ -698,7 +914,12 @@ EOF
     chmod -R 0755 "$release_dir"
     chmod +x "$release_dir/bin/darjeeling" 2>/dev/null || true
 
-    # Link /opt/darjeeling/current atomically
+    # Link /opt/darjeeling/current atomically; remember the release it
+    # pointed at for `darjeeling rollback`.
+    if [[ -n "$prev_release" && -d "$prev_release" && "$prev_release" != "$(readlink -f "$release_dir")" ]]; then
+        ln -sfn "$prev_release" /opt/darjeeling/previous
+        log "Previous release kept for rollback: ${prev_release}"
+    fi
     ln -sfn "releases/${DJ_VERSION}" /opt/darjeeling/current
     ln -sfn /opt/darjeeling/current/bin/darjeeling /usr/local/bin/darjeeling
 
@@ -788,12 +1009,25 @@ with open(os.environ['DJ_DEV_FILE'], 'w') as f:
             set_env_var DARJEELING_PERMISSION_CEILING "$ceiling" "$env_file"
         fi
         log "Permission ceiling: ${ceiling}"
-        if [[ "$ceiling" != "bypassPermissions" ]]; then
+        if [[ "$ceiling" == "bypassPermissions" && "$ceiling_forced_by_old" == "true" && "$legacy_ceiling" != "bypassPermissions" ]]; then
+            review_forced_ceiling "$env_file" "$legacy_marker"
+        elif [[ "$ceiling" != "bypassPermissions" ]]; then
             log "  To allow bypassPermissions turns: sudo darjeeling config set permission-ceiling bypassPermissions && sudo systemctl restart darjeeling.service"
         fi
-        if [[ -n "$legacy_vault" ]]; then
+        # Vault: set from the legacy config on first migration, or once when
+        # converting 1.0.3's DARJEELING_VAULT_PATH (a key the server never
+        # read). Otherwise the env file's value is the user's and is kept.
+        local vault_path_1_0_3 current_vault
+        vault_path_1_0_3="$(get_env_var DARJEELING_VAULT_PATH "$env_file")"
+        current_vault="$(get_env_var DARJEELING_VAULT "$env_file")"
+        if [[ -n "$legacy_vault" && ( "$env_is_new" == "true" || -n "$vault_path_1_0_3" ) ]]; then
+            if [[ "$env_is_new" != "true" && -n "$current_vault" && "$current_vault" != "$legacy_vault" ]]; then
+                warn "Vault changes from ${current_vault} to your 4.1.0 vault ${legacy_vault}: 1.0.3 wrote it as DARJEELING_VAULT_PATH, which the server ignored."
+                warn "  To keep using ${current_vault}: sudo darjeeling config set vault ${current_vault} && sudo systemctl restart darjeeling.service"
+            fi
             set_env_var DARJEELING_VAULT "$legacy_vault" "$env_file"
-            # 1.0.3 and earlier wrote a key the server never read.
+        fi
+        if [[ -n "$vault_path_1_0_3" ]]; then
             unset_env_var DARJEELING_VAULT_PATH "$env_file"
         fi
         chown "root:${SERVICE_USER}" "$env_file"
@@ -816,7 +1050,11 @@ with open(os.environ['DJ_DEV_FILE'], 'w') as f:
         chmod 0640 "$env_file"
     else
         log "Existing configuration preserved at ${env_file}."
+        if [[ "$(get_env_var DARJEELING_PERMISSION_CEILING "$env_file")" == "bypassPermissions" ]]; then
+            warn "Permission ceiling bypassPermissions is kept. The 1.0.3 example config used it as the default; to lower it: sudo darjeeling config set permission-ceiling acceptEdits"
+        fi
     fi
+    apply_pending_bind "$env_file"
 
     # DeepSeek API key: the server reads ${STATE_ROOT}/secrets/deepseek_api_key
     # first and only falls back to DEEPSEEK_API_KEY in the environment, so keep
@@ -825,7 +1063,9 @@ with open(os.environ['DJ_DEV_FILE'], 'w') as f:
     local deepseek_secret="${secrets_dir}/deepseek_api_key"
     local env_deepseek=""
     env_deepseek="$(get_env_var DEEPSEEK_API_KEY "$env_file")"
-    local deepseek_value="${legacy_deepseek:-$env_deepseek}"
+    # The env file is the live configuration; the legacy 4.1.0 config.env is
+    # only a fallback (it may hold a key that was rotated since migration).
+    local deepseek_value="${env_deepseek:-$legacy_deepseek}"
     if [[ -n "$deepseek_value" && ! -s "$deepseek_secret" ]]; then
         install -d -m 0700 -o "$SERVICE_USER" -g "$SERVICE_USER" "$secrets_dir"
         ( umask 077; printf '%s\n' "$deepseek_value" > "$deepseek_secret" )
@@ -1026,10 +1266,9 @@ EOF
         fi
         echo ""
         echo "--- Vault Sync ---"
-        local v_path="/var/lib/darjeeling/vault"
-        if [[ "$is_legacy_migration" == "true" && -n "$legacy_vault" ]]; then
-            v_path="$legacy_vault"
-        fi
+        local v_path
+        v_path="$(get_env_var DARJEELING_VAULT "$env_file")"
+        v_path="${v_path:-/var/lib/darjeeling/vault}"
         echo "Target Obsidian Vault directory: ${v_path}"
         echo "Sync notes via Obsidian Sync, Syncthing, or Git. Exclude .obsidian/ in both directions."
         if [[ "$is_legacy_migration" == "true" ]]; then
@@ -1047,4 +1286,8 @@ EOF
     fi
 }
 
-main "$@"
+# DJ_INSTALL_SOURCE_ONLY=1 lets the test suite source the helpers above
+# without running the installer.
+if [[ -z "${DJ_INSTALL_SOURCE_ONLY:-}" ]]; then
+    main "$@"
+fi
