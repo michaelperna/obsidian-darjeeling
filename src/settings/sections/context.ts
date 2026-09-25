@@ -9,11 +9,13 @@ export function displayVaultContextSettings(
 
   new Setting(containerEl)
     .setName("Vault instructions")
-    .setDesc("Send DARJEELING.md instructions to direct provider APIs.")
+    .setDesc(
+      "Send DARJEELING.md instructions to direct (cloud) provider APIs. Off by default; CLI agents always receive them."
+    )
     .addDropdown((drop) => {
-      drop.addOption("instructions", "Send instructions (DARJEELING.md)");
       drop.addOption("none", "None (neutral prompt only)");
-      drop.setValue(plugin.settings.vaultContext || "instructions").onChange(async (val) => {
+      drop.addOption("instructions", "Send instructions (DARJEELING.md)");
+      drop.setValue(plugin.settings.vaultContext || "none").onChange(async (val) => {
         plugin.settings.vaultContext = val as "none" | "instructions";
         await plugin.saveSettings();
       });
