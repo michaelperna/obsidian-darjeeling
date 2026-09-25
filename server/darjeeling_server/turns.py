@@ -22,25 +22,29 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from darjeeling_server.agents import AGENTS
 from darjeeling_server.agents.agy import normalize_agy_event
-from darjeeling_server.agents.base import AgentSpec
+from darjeeling_server.agents.base import AgentSpec, is_uuid
 from darjeeling_server.auth import require_auth, unregister_ws, ws_auth
 from darjeeling_server.config import (
     MAX_CONCURRENT_TURNS,
     PERMISSION_CEILING,
-    PERMISSION_RANK,
     TURN_BUFFER_BUDGET,
     TURN_TIMEOUT,
     VAULT_PATH,
+    child_env,
     log,
+    permission_rank,
 )
 from darjeeling_server.host import (
     agent_load,
     register_turn,
+    release_turn_slot,
+    try_reserve_turn_slot,
     unregister_turn,
+    update_turn_slot,
 )
 
 router = APIRouter(tags=["turns"])
@@ -53,7 +57,9 @@ class TurnRequest(BaseModel):
     model: Optional[str] = None
     fallback_model: Optional[str] = None
     effort: Optional[str] = None
-    permission_mode: Optional[str] = "plan"
+    # Absent -> the agent's most restrictive mode; explicit null or an
+    # unknown mode -> rejected (see resolve_turn_permission).
+    permission_mode: Optional[str] = None
     resume: Optional[str] = None
     session_id: Optional[str] = None
     fork: bool = False
@@ -70,6 +76,86 @@ class TurnRequest(BaseModel):
 
     model_config = {"populate_by_name": True}
 
+    @field_validator("resume", "session_id", mode="before")
+    @classmethod
+    def _uuid_session(cls, v: Any) -> Any:
+        # Session ids reach agent argv (--resume/--session-id/--conversation);
+        # only UUIDs are accepted so a value can never be read as a flag.
+        if v is None or v == "":
+            return None
+        if not isinstance(v, str) or not is_uuid(v):
+            raise ValueError("must be a UUID")
+        return v
+
+
+class PermissionError_(Exception):
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def resolve_turn_permission(spec: AgentSpec, req: TurnRequest) -> str:
+    """
+    Allow-list the requested permission mode against the agent descriptor,
+    then enforce the host ceiling (ADR-07). Writes the canonical mode back to
+    req.permission_mode so build_argv always passes an explicit flag.
+    Raises PermissionError_ on unknown/null modes or a ceiling breach.
+    """
+    explicit = "permission_mode" in req.model_fields_set
+    try:
+        mode = spec.resolve_permission_mode(req.permission_mode, explicit=explicit)
+    except ValueError as err:
+        raise PermissionError_("invalid_permission_mode", str(err))
+    if permission_rank(mode) > permission_rank(PERMISSION_CEILING):
+        raise PermissionError_(
+            "permission_ceiling",
+            f"Permission mode '{mode}' exceeds host ceiling '{PERMISSION_CEILING}'. "
+            f"Raise the ceiling by setting DARJEELING_PERMISSION_CEILING={mode} "
+            "in the host environment.",
+        )
+    req.permission_mode = mode
+    return mode
+
+
+class AtCapacityError(Exception):
+    pass
+
+
+async def drain_lines(reader: asyncio.StreamReader, sink, max_line: int = 4000) -> None:
+    """
+    Read newline-delimited output until EOF without ever giving up.
+
+    `async for line in reader` raises ValueError on a line longer than the
+    reader's limit and stops draining; the child then blocks on a full pipe.
+    Here an oversize line is truncated to max_line chars and the rest of it
+    is discarded chunk by chunk.
+    """
+    skipping = False
+    while True:
+        try:
+            raw = await reader.readuntil(b"\n")
+        except asyncio.IncompleteReadError as e:
+            if e.partial and not skipping:
+                sink(e.partial.decode("utf-8", errors="replace").rstrip()[:max_line])
+            return
+        except asyncio.LimitOverrunError as e:
+            chunk = await reader.read(max(e.consumed, 1))
+            if not chunk:
+                return
+            if not skipping:
+                text = chunk.decode("utf-8", errors="replace")[:max_line]
+                sink(text + " [line truncated]")
+                skipping = True
+            continue
+        if skipping:
+            # Tail of the oversize line.
+            skipping = False
+            continue
+        line = raw.decode("utf-8", errors="replace").rstrip()
+        if line:
+            sink(line[:max_line])
+
 
 class AgentTurn:
     """One agent invocation: spawn, stream NDJSON out, allow interruption."""
@@ -81,6 +167,8 @@ class AgentTurn:
         self.session_id: Optional[str] = None
         self.started = time.monotonic()
         self.exited_emitted = False
+        # Concurrency slot reserved by TurnRegistry.create_turn before spawn.
+        self.slot_key: Optional[str] = None
 
     async def run(self, emit) -> None:
         if not self.spec.available:
@@ -98,19 +186,15 @@ class AgentTurn:
             )
             return
 
-        # Check permission ceiling (ADR-07)
-        requested_rank = PERMISSION_RANK.get(self.req.permission_mode, 0)
-        ceiling_rank = PERMISSION_RANK.get(PERMISSION_CEILING, 1)
-        if requested_rank > ceiling_rank:
+        # Permission allow-list + ceiling (ADR-07). Fail closed.
+        try:
+            resolve_turn_permission(self.spec, self.req)
+        except PermissionError_ as perr:
             await emit(
                 {
                     "type": "dj.error",
-                    "code": "permission_ceiling",
-                    "message": (
-                        f"Permission mode '{self.req.permission_mode}' exceeds host ceiling '{PERMISSION_CEILING}'. "
-                        f"Raise the ceiling by setting DARJEELING_PERMISSION_CEILING={self.req.permission_mode} "
-                        "in the host environment."
-                    ),
+                    "code": perr.code,
+                    "message": perr.message,
                     "terminal": True,
                 }
             )
@@ -172,15 +256,16 @@ class AgentTurn:
             await emit(event)
 
         turn_key = f"api_{id(self)}"
-        register_turn(
-            turn_key,
-            {
-                "agent": self.spec.key,
-                "model": self.req.model or "(default)",
-                "task": asyncio.current_task(),
-                "started": time.monotonic(),
-            },
-        )
+        if self.slot_key is None:
+            register_turn(
+                turn_key,
+                {
+                    "agent": self.spec.key,
+                    "model": self.req.model or "(default)",
+                    "task": asyncio.current_task(),
+                    "started": time.monotonic(),
+                },
+            )
         exit_code = 0
         try:
             await self.spec.run_api(self.req, capturing_emit)
@@ -227,7 +312,8 @@ class AgentTurn:
                 )
             return
 
-        env = os.environ.copy()
+        # child_env strips DARJEELING_* (incl. the token) and DEEPSEEK_API_KEY.
+        env = child_env()
         env.setdefault("TERM", "dumb")
         env["CLAUDE_CODE_NON_INTERACTIVE"] = "1"
 
@@ -302,27 +388,30 @@ class AgentTurn:
             self.proc.stdin.close()
             await self.proc.stdin.wait_closed()
 
-        register_turn(
-            self.proc.pid,
-            {
-                "agent": self.spec.key,
-                "model": self.req.model or "(default)",
-                "proc": self.proc,
-                "started": time.monotonic(),
-            },
-        )
+        if self.slot_key is not None:
+            update_turn_slot(self.slot_key, pid=self.proc.pid)
+        else:
+            register_turn(
+                self.proc.pid,
+                {
+                    "agent": self.spec.key,
+                    "model": self.req.model or "(default)",
+                    "proc": self.proc,
+                    "started": time.monotonic(),
+                },
+            )
 
         await emit({"type": "dj.status", "state": "running", "pid": self.proc.pid})
 
         stderr_buf: collections.deque = collections.deque(maxlen=100)
 
+        def _stderr_sink(line: str) -> None:
+            stderr_buf.append(line)
+            log.debug("[%s stderr] %s", self.spec.key, line)
+
         async def drain_stderr() -> None:
             assert self.proc and self.proc.stderr
-            async for raw in self.proc.stderr:
-                line = raw.decode("utf-8", errors="replace").rstrip()
-                if line:
-                    stderr_buf.append(line)
-                    log.debug("[%s stderr] %s", self.spec.key, line)
+            await drain_lines(self.proc.stderr, _stderr_sink)
 
         err_task = asyncio.create_task(drain_stderr())
 
@@ -514,6 +603,13 @@ class TurnRegistry:
                 self.sessions_to_turn.pop(target_session, None)
 
         turn_id = "t_" + uuid.uuid4().hex[:12]
+        # Reserve the concurrency slot atomically, before anything spawns.
+        if not try_reserve_turn_slot(
+            turn_id, {"agent": spec.key, "model": req.model or "(default)"}
+        ):
+            raise AtCapacityError(
+                f"{agent_load()['activeTurns']} turn(s) already running, cap is {MAX_CONCURRENT_TURNS}."
+            )
         record = TurnRecord(
             turn_id=turn_id,
             client_turn_id=req.client_turn_id,
@@ -536,8 +632,19 @@ class TurnRegistry:
         )
 
         agent_turn = AgentTurn(spec, req)
+        agent_turn.slot_key = turn_id
         record.agent_turn = agent_turn
-        record.task = asyncio.create_task(self._run_guarded(record, agent_turn, spec, req))
+        try:
+            record.task = asyncio.create_task(self._run_guarded(record, agent_turn, spec, req))
+        except BaseException:
+            release_turn_slot(turn_id)
+            self.active_turns.pop(turn_id, None)
+            if target_session:
+                self.sessions_to_turn.pop(target_session, None)
+            raise
+        update_turn_slot(turn_id, task=record.task)
+        # Also release if the task is cancelled before its body ever runs.
+        record.task.add_done_callback(lambda _t, k=turn_id: release_turn_slot(k))
         return record
 
     async def _run_guarded(
@@ -602,6 +709,7 @@ class TurnRegistry:
             record.status = "error"
             record.emit_sync({"type": "dj.error", "message": str(err), "terminal": True})
         finally:
+            release_turn_slot(record.turn_id)
             record.ended_at = time.time()
             if turn.session_id:
                 record.session_id = turn.session_id
@@ -785,39 +893,6 @@ async def agent_channel(websocket: WebSocket, token: Optional[str] = Query(None)
                         )
                         continue
 
-                # Permission ceiling check (ADR-07)
-                req_perm = payload.get("permission_mode") or payload.get("mode") or "plan"
-                if payload.get("dangerously_skip_permissions") or payload.get("dangerously-skip-permissions"):
-                    req_perm = "bypassPermissions"
-                requested_rank = PERMISSION_RANK.get(req_perm, 0)
-                ceiling_rank = PERMISSION_RANK.get(PERMISSION_CEILING, 1)
-                if requested_rank > ceiling_rank:
-                    await send_queue.put(
-                        {
-                            "type": "dj.error",
-                            "code": "permission_ceiling",
-                            "message": (
-                                f"Permission mode '{req_perm}' exceeds host ceiling '{PERMISSION_CEILING}'. "
-                                f"Raise the ceiling by setting DARJEELING_PERMISSION_CEILING={req_perm} "
-                                "in the host environment."
-                            ),
-                            "terminal": True,
-                        }
-                    )
-                    continue
-
-                load = agent_load()
-                if load["atCapacity"]:
-                    await send_queue.put(
-                        {
-                            "type": "dj.error",
-                            "code": "at_capacity",
-                            "message": f"Refused: {load['activeTurns']} turn(s) already running, cap is {MAX_CONCURRENT_TURNS}.",
-                            "terminal": True,
-                        }
-                    )
-                    continue
-
                 agent_name = payload.get("agent", "claude")
                 spec = AGENTS.get(agent_name)
                 if not spec:
@@ -826,8 +901,43 @@ async def agent_channel(websocket: WebSocket, token: Optional[str] = Query(None)
                     )
                     continue
 
+                # Legacy escalation spellings are never honoured, but a frame
+                # carrying them is still refused if it would breach the ceiling.
+                legacy_perm = None
+                if payload.get("dangerously_skip_permissions") or payload.get("dangerously-skip-permissions"):
+                    legacy_perm = "bypassPermissions"
+                elif "permission_mode" not in payload and payload.get("mode"):
+                    legacy_perm = payload.get("mode")
+                if legacy_perm is not None and permission_rank(legacy_perm) > permission_rank(PERMISSION_CEILING):
+                    await send_queue.put(
+                        {
+                            "type": "dj.error",
+                            "code": "permission_ceiling",
+                            "message": (
+                                f"Permission mode '{legacy_perm}' exceeds host ceiling '{PERMISSION_CEILING}'. "
+                                f"Raise the ceiling by setting DARJEELING_PERMISSION_CEILING={legacy_perm} "
+                                "in the host environment."
+                            ),
+                            "terminal": True,
+                        }
+                    )
+                    continue
+
                 try:
                     req = TurnRequest(**payload)
+                except Exception as e:
+                    await send_queue.put({"type": "dj.error", "code": "bad_request", "message": str(e), "terminal": True})
+                    continue
+
+                try:
+                    resolve_turn_permission(spec, req)
+                except PermissionError_ as perr:
+                    await send_queue.put(
+                        {"type": "dj.error", "code": perr.code, "message": perr.message, "terminal": True}
+                    )
+                    continue
+
+                try:
                     record = turn_registry.create_turn(spec, req)
                 except SessionBusyError as sbe:
                     await send_queue.put(
@@ -836,6 +946,16 @@ async def agent_channel(websocket: WebSocket, token: Optional[str] = Query(None)
                             "code": "session_busy",
                             "turn_id": sbe.turn_id,
                             "message": str(sbe),
+                            "terminal": True,
+                        }
+                    )
+                    continue
+                except AtCapacityError as cap:
+                    await send_queue.put(
+                        {
+                            "type": "dj.error",
+                            "code": "at_capacity",
+                            "message": f"Refused: {cap}",
                             "terminal": True,
                         }
                     )
@@ -930,20 +1050,13 @@ async def agent_turn_endpoint(req: TurnRequest, async_: bool = Query(False, alia
     if not spec.available:
         raise HTTPException(status_code=503, detail=f"{spec.binary} not installed on host")
 
-    load = agent_load()
-    if load["atCapacity"]:
+    # Permission allow-list + ceiling (fail closed).
+    try:
+        resolve_turn_permission(spec, req)
+    except PermissionError_ as perr:
         raise HTTPException(
-            status_code=429,
-            detail=f"{load['activeTurns']} turn(s) already running, cap is {MAX_CONCURRENT_TURNS}.",
-        )
-
-    # Permission ceiling check
-    requested_rank = PERMISSION_RANK.get(req.permission_mode, 0)
-    ceiling_rank = PERMISSION_RANK.get(PERMISSION_CEILING, 1)
-    if requested_rank > ceiling_rank:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Permission mode '{req.permission_mode}' exceeds host ceiling '{PERMISSION_CEILING}'.",
+            status_code=403 if perr.code == "permission_ceiling" else 400,
+            detail=perr.message,
         )
 
     # Session busy check
@@ -967,6 +1080,8 @@ async def agent_turn_endpoint(req: TurnRequest, async_: bool = Query(False, alia
             status_code=409,
             detail={"code": "session_busy", "turn_id": sbe.turn_id, "message": str(sbe)},
         )
+    except AtCapacityError as cap:
+        raise HTTPException(status_code=429, detail=str(cap))
 
     if is_async:
         return JSONResponse(status_code=202, content={"turn_id": record.turn_id, "status": "running"})

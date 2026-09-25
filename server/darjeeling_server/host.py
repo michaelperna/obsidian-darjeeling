@@ -105,6 +105,67 @@ def unregister_turn(key: Any) -> None:
     _active_turns.pop(key, None)
 
 
+def _live_turns() -> Dict[Any, Dict[str, Any]]:
+    """Prune finished entries and return the live ones."""
+    live = {}
+    for key, meta in list(_active_turns.items()):
+        proc = meta.get("proc")
+        task = meta.get("task")
+        if proc is not None:
+            if proc.returncode is None:
+                live[key] = meta
+            else:
+                _active_turns.pop(key, None)
+        elif task is not None:
+            if not task.done():
+                live[key] = meta
+            else:
+                _active_turns.pop(key, None)
+        elif meta.get("reserved"):
+            # A slot reserved before spawn; released explicitly in finally.
+            live[key] = meta
+        else:
+            if isinstance(key, int):
+                if Path(f"/proc/{key}").exists():
+                    live[key] = meta
+                else:
+                    _active_turns.pop(key, None)
+            else:
+                live[key] = meta
+    return live
+
+
+def try_reserve_turn_slot(key: Any, meta: Dict[str, Any]) -> bool:
+    """
+    Atomically check capacity and claim a slot, BEFORE anything is spawned.
+
+    Synchronous on purpose: there is no await between the capacity check and
+    the insert, so two turns arriving on the same event loop can never both
+    pass the check (the old check-then-spawn raced). The caller must call
+    release_turn_slot(key) in a finally block. Covers CLI and API
+    (DeepSeek) turns alike.
+    """
+    if key in _active_turns:
+        return True
+    if len(_live_turns()) >= MAX_CONCURRENT_TURNS:
+        return False
+    entry = dict(meta)
+    entry["reserved"] = True
+    entry.setdefault("started", time.monotonic())
+    _active_turns[key] = entry
+    return True
+
+
+def update_turn_slot(key: Any, **fields: Any) -> None:
+    meta = _active_turns.get(key)
+    if meta is not None:
+        meta.update(fields)
+
+
+def release_turn_slot(key: Any) -> None:
+    _active_turns.pop(key, None)
+
+
 def _read(path: Path, cast=str, default=None):
     try:
         raw = path.read_text().strip()
@@ -340,28 +401,7 @@ def disk_info(path: Path) -> Dict[str, Any]:
 
 
 def agent_load() -> Dict[str, Any]:
-    live = {}
-    for key, meta in list(_active_turns.items()):
-        proc = meta.get("proc")
-        task = meta.get("task")
-        if proc is not None:
-            if proc.returncode is None:
-                live[key] = meta
-            else:
-                _active_turns.pop(key, None)
-        elif task is not None:
-            if not task.done():
-                live[key] = meta
-            else:
-                _active_turns.pop(key, None)
-        else:
-            if isinstance(key, int):
-                if Path(f"/proc/{key}").exists():
-                    live[key] = meta
-                else:
-                    _active_turns.pop(key, None)
-            else:
-                live[key] = meta
+    live = _live_turns()
 
     tmux_agents = 0
     try:
@@ -381,7 +421,7 @@ def agent_load() -> Dict[str, Any]:
         "interactiveAgents": tmux_agents,
         "turns": [
             {
-                "pid": key if isinstance(key, int) else None,
+                "pid": key if isinstance(key, int) else meta.get("pid"),
                 "model": meta.get("model"),
                 "agent": meta.get("agent"),
                 "startedAgo": round(time.monotonic() - meta.get("started", 0), 1),

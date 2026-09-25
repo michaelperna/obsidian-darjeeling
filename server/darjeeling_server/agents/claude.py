@@ -3,7 +3,13 @@
 import json
 from typing import TYPE_CHECKING, List
 
-from darjeeling_server.agents.base import AgentSpec
+from darjeeling_server.agents.base import (
+    AgentSpec,
+    ArgvError,
+    safe_session_id,
+    safe_value,
+    safe_values,
+)
 from darjeeling_server.agents.catalog import load_catalog
 
 if TYPE_CHECKING:
@@ -11,6 +17,12 @@ if TYPE_CHECKING:
 
 
 class ClaudeAgent(AgentSpec):
+    # Real Claude Code modes only (see `claude --help`, --permission-mode
+    # choices). The old 'acceptAll' label was never a Claude Code mode; it is
+    # now rejected as unknown instead of silently mapping to
+    # --dangerously-skip-permissions.
+    permission_aliases = {"accept-edits": "acceptEdits"}
+
     def __init__(self):
         catalog = load_catalog().get("claude_code", {})
         models = [
@@ -39,7 +51,6 @@ class ClaudeAgent(AgentSpec):
                 {"id": "plan", "label": "Plan only (read-only)"},
                 {"id": "acceptEdits", "label": "Accept edits"},
                 {"id": "dontAsk", "label": "Don't ask (skip gated tools)"},
-                {"id": "acceptAll", "label": "Accept everything"},
                 {"id": "bypassPermissions", "label": "Bypass all checks"},
             ],
         )
@@ -47,6 +58,24 @@ class ClaudeAgent(AgentSpec):
             self.tested_versions = catalog["tested_versions"]
 
     def build_argv(self, req: "TurnRequest") -> List[str]:
+        # Every user-supplied value below is validated so it can never be
+        # parsed as a flag: values may not start with '-', and session ids
+        # must be UUIDs. The prompt itself goes via stdin, never argv.
+        # Values stay as separate argv entries (`--flag value`): with the
+        # leading-dash guard this is equivalent to `--flag=value` and keeps
+        # the argv shape the tests and the fake CLI rely on.
+        model = safe_value("model", req.model or None)
+        fallback_model = safe_value("fallback_model", req.fallback_model or None)
+        effort = safe_value("effort", req.effort or None)
+        mode = self.resolve_permission_mode(
+            req.permission_mode, explicit="permission_mode" in req.model_fields_set
+        )
+        resume = safe_session_id("resume", req.resume or None)
+        session_id = safe_session_id("session_id", req.session_id or None)
+        allowed_tools = safe_values("allowed_tools", req.allowed_tools)
+        disallowed_tools = safe_values("disallowed_tools", req.disallowed_tools)
+        add_dirs = safe_values("add_dirs", req.add_dirs)
+
         argv = [
             self.binary,
             "-p",
@@ -58,33 +87,36 @@ class ClaudeAgent(AgentSpec):
         ]
         if req.partial_messages:
             argv.append("--include-partial-messages")
-        if req.model:
-            argv += ["--model", req.model]
-        if req.fallback_model:
-            argv += ["--fallback-model", req.fallback_model]
-        if req.effort:
-            argv += ["--effort", req.effort]
-        if req.permission_mode:
-            mode = req.permission_mode
-            # 'acceptAll' is our legacy label for the flag-based escape hatch.
-            if mode == "acceptAll":
-                argv.append("--dangerously-skip-permissions")
-            else:
-                argv += ["--permission-mode", mode]
-        if req.resume:
-            argv += ["--resume", req.resume]
+        if model:
+            argv += ["--model", model]
+        if fallback_model:
+            argv += ["--fallback-model", fallback_model]
+        if effort:
+            argv += ["--effort", effort]
+        # Always pass an explicit mode so the CLI's own default never applies.
+        argv += ["--permission-mode", mode]
+        if resume:
+            argv += ["--resume", resume]
             if req.fork:
                 argv.append("--fork-session")
-        elif req.session_id:
-            argv += ["--session-id", req.session_id]
+        elif session_id:
+            argv += ["--session-id", session_id]
         if req.json_schema is not None:
+            # json.dumps of a dict always starts with '{'.
             argv += ["--json-schema", json.dumps(req.json_schema)]
         if req.append_system_prompt:
-            argv += ["--append-system-prompt", req.append_system_prompt]
-        if req.allowed_tools:
-            argv += ["--allowedTools", *req.allowed_tools]
-        if req.disallowed_tools:
-            argv += ["--disallowedTools", *req.disallowed_tools]
-        for extra in req.add_dirs:
+            text = req.append_system_prompt
+            if "\x00" in text:
+                raise ArgvError("append_system_prompt contains NUL")
+            # Free text may legitimately start with '-' (a bullet list);
+            # a leading newline keeps it from ever looking like a flag.
+            if text.startswith("-"):
+                text = "\n" + text
+            argv += ["--append-system-prompt", text]
+        if allowed_tools:
+            argv += ["--allowedTools", *allowed_tools]
+        if disallowed_tools:
+            argv += ["--disallowedTools", *disallowed_tools]
+        for extra in add_dirs:
             argv += ["--add-dir", extra]
         return argv

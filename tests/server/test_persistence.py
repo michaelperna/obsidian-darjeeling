@@ -2,6 +2,7 @@
 
 import json
 import time
+import uuid
 from typing import Any, Dict, List
 
 import httpx
@@ -59,7 +60,8 @@ def test_reattach_with_since_seq_in_order_no_dupes(server):
 
 def test_concurrent_session_resume_returns_session_busy(server):
     """Two clients resuming the same session_id concurrently -> second gets session_busy."""
-    session_id = "sess_concurrent_test_123"
+    # Session ids must be UUIDs (they reach agent argv).
+    session_id = str(uuid.uuid4())
     with ws_open(server) as ws1:
         ws1.send(json.dumps({
             "type": "turn",

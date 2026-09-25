@@ -31,6 +31,12 @@ class DeepSeekAgent(AgentSpec):
     """
 
     is_api = True
+    # A plain chat-completions call has no tools, so every real permission
+    # mode collapses onto "n/a". Unknown strings are still rejected.
+    permission_aliases = {
+        m: "n/a"
+        for m in ("plan", "acceptEdits", "accept-edits", "dontAsk", "bypassPermissions")
+    }
 
     def __init__(self):
         catalog = load_catalog().get("deepseek", {})

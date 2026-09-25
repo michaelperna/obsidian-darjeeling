@@ -78,11 +78,31 @@ DARJEELING_TMUX_SOCKET = os.environ.get("DARJEELING_TMUX_SOCKET", "darjeeling")
 TMUX_TMPDIR = os.environ.get("TMUX_TMPDIR", str(STATE_DIR / "tmux"))
 
 DEFAULT_SESSION = os.environ.get("DARJEELING_SESSION", "darjeeling")
-TOKEN_FILE = Path(
-    os.path.expanduser(
-        os.environ.get("DARJEELING_TOKEN_FILE", str(STATE_DIR / "token"))
-    )
-).resolve()
+# Token lives at $STATE_DIR/.token (dot file), the same path install.sh,
+# darjeeling.env.example and the CLI use.
+DEFAULT_TOKEN_FILE = STATE_DIR / ".token"
+_LEGACY_TOKEN_FILE = STATE_DIR / "token"
+
+
+def _resolve_token_file() -> Path:
+    env_path = os.environ.get("DARJEELING_TOKEN_FILE", "").strip()
+    if env_path:
+        return Path(os.path.expanduser(env_path)).resolve()
+    # Servers <= 1.0.3 defaulted to $STATE_DIR/token (no dot) when the env
+    # var was unset. Carry such a token over so paired clients keep working.
+    try:
+        if _LEGACY_TOKEN_FILE.is_file() and not DEFAULT_TOKEN_FILE.exists():
+            os.replace(_LEGACY_TOKEN_FILE, DEFAULT_TOKEN_FILE)
+            log.warning(
+                "Auth: moved legacy token %s -> %s", _LEGACY_TOKEN_FILE, DEFAULT_TOKEN_FILE
+            )
+    except OSError as err:
+        log.warning("Auth: could not migrate legacy token file: %s", err)
+        return _LEGACY_TOKEN_FILE.resolve()
+    return DEFAULT_TOKEN_FILE.resolve()
+
+
+TOKEN_FILE = _resolve_token_file()
 
 DEFAULT_COLS, DEFAULT_ROWS = 120, 34
 
@@ -138,8 +158,15 @@ PERMISSION_RANK = {
     "accept-edits": 1,
     "dontAsk": 1,
     "bypassPermissions": 2,
-    "acceptAll": 2,
+    "n/a": 0,
 }
+
+
+def permission_rank(mode: Optional[str]) -> int:
+    """Rank of a permission mode; unknown modes rank highest (fail closed)."""
+    if mode is None:
+        return max(PERMISSION_RANK.values())
+    return PERMISSION_RANK.get(mode, max(PERMISSION_RANK.values()) + 1)
 
 PERMISSION_CEILING = _resolve_permission_ceiling()
 
@@ -192,21 +219,39 @@ def _resolve_token() -> str:
 AUTH_TOKEN = _resolve_token()
 
 
+# Networks a bind is allowed on without DARJEELING_ALLOW_PUBLIC_BIND:
+# RFC 1918, CGNAT 100.64/10 (Tailscale / NordVPN Meshnet) and IPv6 ULA.
+# Loopback is handled separately. Everything else -- including the
+# unspecified addresses (0.0.0.0, ::), link-local, multicast and reserved
+# ranges that Python's `is_private` happens to include -- is refused.
+_BIND_ALLOWED_NETS = [
+    ipaddress.ip_network(n)
+    for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "fc00::/7")
+]
+
+# Overlay-network interfaces whose address is private by construction.
+MESH_INTERFACE_PREFIXES = ("tailscale", "nordlynx", "meshnet", "nordvpn")
+
+
+def _is_mesh_interface(iface: str) -> bool:
+    return any(iface.startswith(p) for p in MESH_INTERFACE_PREFIXES)
+
+
 def _is_private_ip(ip_str: str) -> bool:
-    """Check if IP is loopback, RFC 1918 private, or 100.64.0.0/10 CGNAT / Meshnet."""
+    """True only for loopback, RFC 1918, 100.64/10 and fc00::/7 unicast addresses."""
     try:
-        addr = ipaddress.ip_address(ip_str)
+        addr = ipaddress.ip_address(ip_str.strip().strip("[]"))
     except ValueError:
         return False
-    if addr.is_loopback or addr.is_private:
+    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
+        addr = addr.ipv4_mapped
+    if addr.is_unspecified or addr.is_multicast or addr.is_link_local:
+        return False
+    if addr.is_loopback:
         return True
-    try:
-        cgnat = ipaddress.ip_network("100.64.0.0/10")
-        if addr in cgnat:
-            return True
-    except ValueError:
-        pass
-    return False
+    if addr.is_reserved:
+        return False
+    return any(addr in net for net in _BIND_ALLOWED_NETS)
 
 
 def _get_interface_ip(iface: str) -> Optional[str]:
@@ -251,22 +296,33 @@ def default_bind(timeout: float = 60.0) -> str:
     Non-private binds refused unless DARJEELING_ALLOW_PUBLIC_BIND=1.
     """
     bind_spec = os.environ.get("DARJEELING_BIND", "").strip()
+    source = "DARJEELING_BIND"
     if not bind_spec:
+        # Legacy DARJEELING_HOST: a bare address, same guard applies.
         bind_spec = os.environ.get("DARJEELING_HOST", "").strip()
-    if not bind_spec or bind_spec == "loopback":
+        source = "DARJEELING_HOST"
+    return _resolve_bind(bind_spec, source, timeout)
+
+
+def _resolve_bind(bind_spec: str, source: str = "DARJEELING_BIND", timeout: float = 60.0) -> str:
+    if not bind_spec or bind_spec in ("loopback", "localhost"):
         return "127.0.0.1"
 
     target_ip: Optional[str] = None
+    mesh_iface = False
     if bind_spec.startswith("address:"):
         target_ip = bind_spec[len("address:") :].strip()
     elif bind_spec.startswith("interface:"):
         iface = bind_spec[len("interface:") :].strip()
+        mesh_iface = _is_mesh_interface(iface)
         log.info("Resolving IPv4 address for interface '%s' (timeout %ds)...", iface, int(timeout))
         deadline = time.time() + timeout
-        while time.time() < deadline:
+        while True:
             ip = _get_interface_ip(iface)
             if ip:
                 target_ip = ip
+                break
+            if time.time() >= deadline:
                 break
             time.sleep(1.0)
         if not target_ip:
@@ -276,10 +332,26 @@ def default_bind(timeout: float = 60.0) -> str:
     else:
         target_ip = bind_spec
 
-    if not _is_private_ip(target_ip):
+    target_ip = target_ip.strip().strip("[]")
+    if target_ip == "localhost":
+        target_ip = "127.0.0.1"
+
+    allowed = _is_private_ip(target_ip)
+    if not allowed and mesh_iface:
+        # A Tailscale / Meshnet interface is private by construction, but
+        # never let it smuggle in an unspecified or multicast address.
+        try:
+            addr = ipaddress.ip_address(target_ip)
+            allowed = not (addr.is_unspecified or addr.is_multicast)
+        except ValueError:
+            allowed = False
+
+    if not allowed:
         if not ALLOW_PUBLIC_BIND:
             raise RuntimeError(
-                f"Refusing to bind to non-private address '{target_ip}' without DARJEELING_ALLOW_PUBLIC_BIND=1"
+                f"Refusing to bind to non-private address '{target_ip}' (from {source}) "
+                "without DARJEELING_ALLOW_PUBLIC_BIND=1. Allowed: loopback, RFC 1918, "
+                "100.64.0.0/10, fc00::/7, or interface:<tailscale*|nordlynx|meshnet*>."
             )
         log.warning(
             "Binding to non-private address '%s' because DARJEELING_ALLOW_PUBLIC_BIND=1",

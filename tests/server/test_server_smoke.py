@@ -264,14 +264,20 @@ def test_default_permission_mode_is_plan(server):
     assert argv[argv.index("--permission-mode") + 1] == "plan"
 
 
-def test_accept_all_maps_to_skip_permissions(fresh_root):
+def test_accept_all_is_rejected_not_mapped_to_skip_permissions(fresh_root):
+    # 'acceptAll' was never a Claude Code mode. It used to map silently to
+    # --dangerously-skip-permissions; it is now refused as unknown, even with
+    # the ceiling at bypassPermissions.
     srv = start_server(fresh_root, extra_env={"DARJEELING_PERMISSION_CEILING": "bypassPermissions"})
     try:
         with ws_open(srv) as ws:
-            run_turn(ws, {"agent": "claude", "prompt": "yolo", "permission_mode": "acceptAll"})
-        argv = [c for c in srv.argv_calls() if c["flavour"] == "claude"][-1]["argv"]
-        assert "--dangerously-skip-permissions" in argv
-        assert "--permission-mode" not in argv
+            ws.send(json.dumps({"type": "turn", "agent": "claude", "prompt": "yolo",
+                                "permission_mode": "acceptAll"}))
+            ok, events = recv_until(ws, lambda e: e.get("type") == "dj.error", timeout=5)
+        assert ok, types(events)
+        err = next(e for e in events if e.get("type") == "dj.error")
+        assert err.get("code") == "invalid_permission_mode"
+        assert not [c for c in srv.argv_calls() if c["flavour"] == "claude"]
     finally:
         stop_server(srv)
 
