@@ -233,3 +233,35 @@ def test_rest_unknown_mode_and_bad_session(server):
     assert r.status_code == 400
     r = server.post("/api/agent/turn", {"agent": "claude", "prompt": "x", "session_id": "-r"})
     assert r.status_code == 422
+
+
+# --------------------------------------------------------------------------
+# agy resume ids: not documented as UUIDs, so a conservative token is allowed
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("value", [SID, uuid.uuid4().hex, "conv_123", "cascade:abc.def-9", "A" * 128])
+def test_agy_resume_accepts_safe_ids(value):
+    r = req(agent="agy", resume=value)
+    assert r.resume == value
+    argv = AGY.build_argv(r)
+    assert argv[argv.index("--conversation") + 1] == value
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["--dangerously-skip-permissions", "-r", "_x", ".hidden", "../x", "a/b", "a b", "a\nb", "A" * 129, "é1"],
+)
+def test_agy_resume_refuses_unsafe_ids(value):
+    with pytest.raises(ValidationError):
+        req(agent="agy", resume=value)
+    r = TurnRequest.model_construct(prompt="x", agent="agy", resume=value)
+    with pytest.raises(ArgvError):
+        AGY.build_argv(r)
+
+
+def test_non_agy_agents_still_require_uuid_resume():
+    with pytest.raises(ValidationError):
+        req(agent="claude", resume="conv_123")
+    r = TurnRequest.model_construct(prompt="x", resume="conv_123")
+    with pytest.raises(ArgvError):
+        CLAUDE.build_argv(r)

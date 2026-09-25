@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from darjeeling_server.agents.base import (
     AgentSpec,
-    safe_session_id,
+    safe_resume_id,
     safe_value,
 )
 
@@ -192,7 +192,8 @@ class AntigravityAgent(AgentSpec):
         mode = self.resolve_permission_mode(
             req.permission_mode, explicit="permission_mode" in req.model_fields_set
         )
-        resume = safe_session_id("resume", req.resume or None)
+        # agy conversation ids are not documented as UUIDs; accept a safe token.
+        resume = safe_resume_id("resume", req.resume or None)
 
         argv = [self.binary, "--output-format", "stream-json"]
 

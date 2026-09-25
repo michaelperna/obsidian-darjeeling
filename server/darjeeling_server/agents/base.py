@@ -1,5 +1,6 @@
 """AgentSpec base class representing an integrated agent runtime."""
 
+import re
 import shutil
 import subprocess
 import uuid
@@ -53,6 +54,27 @@ def safe_session_id(name: str, value: Optional[str]) -> Optional[str]:
         return None
     if not is_uuid(value):
         raise ArgvError(f"{name} must be a UUID")
+    return value
+
+
+# Agents whose session id format is not documented as a UUID (agy) get a
+# conservative token instead: starts with a letter or digit (never '-', so it
+# cannot be read as a flag), then letters, digits and _ . : - only (no '/',
+# whitespace or control characters), at most 128 characters.
+_SAFE_RESUME_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
+
+
+def is_safe_resume_id(value: str) -> bool:
+    return isinstance(value, str) and _SAFE_RESUME_ID.fullmatch(value) is not None
+
+
+def safe_resume_id(name: str, value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    if not is_safe_resume_id(value):
+        raise ArgvError(
+            f"{name} must start with a letter or digit and contain only letters, digits, '_', '.', ':' or '-' (max 128)"
+        )
     return value
 
 
