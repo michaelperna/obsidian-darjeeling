@@ -12,7 +12,6 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from darjeeling_server.agents import AGENTS
 from darjeeling_server.auth import require_auth, ws_auth
 from darjeeling_server.config import (
-    ACCESS_LOG,
     AUTH_TOKEN,
     VAULT_SYNC,
     VERSION,
@@ -25,29 +24,34 @@ from darjeeling_server.turns import router as turns_router
 from darjeeling_server.vault import router as vault_router
 
 # Configure uvicorn.access logging (G-34, SRV-29, QA-12)
+_QUERY_RE = re.compile(
+    r"(\b(?:GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|WebSocket)\s+[^?\s\"']+)\?[^\s\"']*"
+)
+
+
+def _strip_query(text: str) -> str:
+    """Drop the query string from a request path or a log line containing one."""
+    if "token=" in text:
+        text = re.sub(r"token=[^&\s'\"]+", "token=[REDACTED]", text)
+    if text.startswith("/") and "?" in text:
+        return text.split("?", 1)[0]
+    return _QUERY_RE.sub(r"\1", text)
+
+
 class AccessLogFilter(logging.Filter):
-    """Strip query strings and redact tokens in access logs."""
+    """
+    Strip query strings and redact tokens in access logs -- always, whether
+    or not DARJEELING_ACCESS_LOG enables the access log. Query strings carry
+    vault note paths (?path=...) and, for old clients, tokens.
+    """
 
     def filter(self, record: logging.LogRecord) -> bool:
         if record.args and isinstance(record.args, tuple):
-            new_args = []
-            for arg in record.args:
-                if isinstance(arg, str):
-                    if "token=" in arg:
-                        arg = re.sub(r"token=[^&\s'\"]+", "token=[REDACTED]", arg)
-                    if "?" in arg and not ACCESS_LOG:
-                        arg = arg.split("?", 1)[0]
-                new_args.append(arg)
-            record.args = tuple(new_args)
+            record.args = tuple(
+                _strip_query(arg) if isinstance(arg, str) else arg for arg in record.args
+            )
         if isinstance(record.msg, str):
-            if "token=" in record.msg:
-                record.msg = re.sub(r"token=[^&\s'\"]+", "token=[REDACTED]", record.msg)
-            if not ACCESS_LOG:
-                record.msg = re.sub(
-                    r"(\b(?:GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|WebSocket)\s+[^?\s]+)\?[^\s]*",
-                    r"\1",
-                    record.msg,
-                )
+            record.msg = _strip_query(record.msg)
         return True
 
 
