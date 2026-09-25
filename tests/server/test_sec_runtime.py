@@ -374,3 +374,64 @@ def test_legacy_token_honoured_by_record_or_fresh_install(auth_mod, monkeypatch)
     monkeypatch.setattr(pairing, "load_devices", lambda: [])
     assert auth.verify_token(LEGACY) == (True, "legacy")
     assert auth.verify_token("wrong") == (False, None)
+
+
+# --------------------------------------------------------------------------
+# 10. Upgrade: devices.json without a legacy record is seeded at startup
+# --------------------------------------------------------------------------
+
+def _load(path):
+    import json as _json
+
+    return _json.loads(path.read_text())
+
+
+def test_startup_seeds_legacy_record_when_missing(auth_mod, monkeypatch):
+    import hashlib
+
+    auth, pairing = auth_mod
+    monkeypatch.setattr(pairing, "AUTH_TOKEN", LEGACY)
+    paired = {"device_id": "phone", "token_hash": "abc", "revoked": False}
+    pairing.DEVICES_FILE.write_text(__import__("json").dumps([paired]))
+    # Before the startup check the host token is refused (fail closed).
+    assert auth.verify_token(LEGACY) == (False, None)
+
+    assert pairing.ensure_legacy_record() == "seeded"
+    devices = _load(pairing.DEVICES_FILE)
+    assert devices[0] == paired  # existing devices untouched
+    legacy = [d for d in devices if d["device_id"] == "legacy"]
+    assert len(legacy) == 1 and legacy[0]["revoked"] is False
+    assert legacy[0]["token_hash"] == hashlib.sha256(LEGACY.encode()).hexdigest()
+    assert auth.verify_token(LEGACY) == (True, "legacy")
+    # Idempotent.
+    assert pairing.ensure_legacy_record() == "present"
+    assert len(_load(pairing.DEVICES_FILE)) == 2
+
+
+def test_startup_never_unrevokes_legacy(auth_mod, monkeypatch):
+    auth, pairing = auth_mod
+    monkeypatch.setattr(pairing, "AUTH_TOKEN", LEGACY)
+    pairing.DEVICES_FILE.write_text('[{"device_id": "legacy", "token_hash": "x", "revoked": true}]')
+    assert pairing.ensure_legacy_record() == "present"
+    assert _load(pairing.DEVICES_FILE)[0]["revoked"] is True
+    assert auth.verify_token(LEGACY) == (False, None)
+
+
+@pytest.mark.parametrize("content", ["{ not json", '{"device_id": "legacy"}'])
+def test_startup_unreadable_devices_fails_closed_with_clear_error(auth_mod, monkeypatch, caplog, content):
+    auth, pairing = auth_mod
+    monkeypatch.setattr(pairing, "AUTH_TOKEN", LEGACY)
+    pairing.DEVICES_FILE.write_text(content)
+    with caplog.at_level("ERROR", logger="darjeeling.pairing"):
+        assert pairing.ensure_legacy_record() == "unreadable"
+    assert pairing.DEVICES_FILE.read_text() == content  # never overwritten
+    msg = " ".join(r.getMessage() for r in caplog.records)
+    assert str(pairing.DEVICES_FILE) in msg and "chmod 600" in msg and "restart" in msg
+    assert auth.verify_token(LEGACY) == (False, None)
+
+
+def test_startup_creates_devices_file_on_fresh_install(auth_mod, monkeypatch):
+    auth, pairing = auth_mod
+    monkeypatch.setattr(pairing, "AUTH_TOKEN", LEGACY)
+    assert pairing.ensure_legacy_record() == "created"
+    assert [d["device_id"] for d in _load(pairing.DEVICES_FILE)] == ["legacy"]
