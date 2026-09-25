@@ -1,4 +1,10 @@
 # /etc/udev/rules.d/99-darjeeling-battery.rules
-# Project Darjeeling battery charge threshold control for ThinkPad / laptops
-SUBSYSTEM=="power_supply", ATTR{charge_control_end_threshold}=="*", GROUP="darjeeling", MODE="0664"
-SUBSYSTEM=="power_supply", ATTR{charge_control_start_threshold}=="*", GROUP="darjeeling", MODE="0664"
+# Project Darjeeling battery charge threshold control for ThinkPad / laptops.
+#
+# power_supply devices have no /dev node, so GROUP=/MODE= never apply to
+# anything. Instead, change the group and mode of the sysfs attribute files
+# themselves when the battery appears. Only the two threshold attributes are
+# touched; the rest of the power_supply tree stays root-only for writes.
+# %S = sysfs mount point, %p = devpath.
+ACTION=="add|change", SUBSYSTEM=="power_supply", ATTR{type}=="Battery", TEST=="charge_control_end_threshold", RUN+="/bin/chgrp darjeeling %S%p/charge_control_end_threshold", RUN+="/bin/chmod g+w %S%p/charge_control_end_threshold"
+ACTION=="add|change", SUBSYSTEM=="power_supply", ATTR{type}=="Battery", TEST=="charge_control_start_threshold", RUN+="/bin/chgrp darjeeling %S%p/charge_control_start_threshold", RUN+="/bin/chmod g+w %S%p/charge_control_start_threshold"
