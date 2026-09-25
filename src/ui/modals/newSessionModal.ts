@@ -14,6 +14,7 @@ import { resolveDeviceRuntime, setDeviceRuntime } from "../../runtime/router";
 import { getTeaLeafBranchSvg } from "../illustrations";
 import { verifyHostAuthentication } from "../../net/pairing";
 import { openDarjeelingSettings } from "../../settings/openSettings";
+import { hasProviderApiKey } from "../../settings/secrets";
 
 export interface SessionTarget {
   mode: RuntimeMode;
@@ -396,9 +397,6 @@ export class DarjeelingNewSessionModal extends Modal {
       }
     }
 
-    if (matchedHost?.authToken) {
-      return matchedHost.authToken;
-    }
 
     const remoteHosts = this.plugin.settings.remoteHosts ?? [];
     const matchedRemoteHost = remoteHosts.find(
@@ -412,11 +410,7 @@ export class DarjeelingNewSessionModal extends Modal {
         /* ignore */
       }
     }
-    if (matchedRemoteHost?.authToken) {
-      return matchedRemoteHost.authToken;
-    }
-
-    return this.plugin.settings.authToken || "";
+    return this.plugin.agentClient?.getAuthToken() ?? "";
   }
 
   private renderRemoteConfig(container: HTMLElement): void {
@@ -651,16 +645,16 @@ export class DarjeelingNewSessionModal extends Modal {
       let label = "";
 
       if (this.apiProvider === "gemini") {
-        hasKey = Boolean(this.plugin.settings.geminiApiKey);
+        hasKey = hasProviderApiKey(this.plugin.secretStorage, this.plugin.settings, "gemini");
         label = hasKey ? "Gemini API key configured" : "Gemini API key missing";
       } else if (this.apiProvider === "deepseek") {
-        hasKey = Boolean(this.plugin.settings.deepseekApiKey);
+        hasKey = hasProviderApiKey(this.plugin.secretStorage, this.plugin.settings, "deepseek");
         label = hasKey ? "DeepSeek API key configured" : "DeepSeek API key missing";
       } else if (this.apiProvider === "anthropic") {
-        hasKey = Boolean(this.plugin.settings.anthropicApiKey);
+        hasKey = hasProviderApiKey(this.plugin.secretStorage, this.plugin.settings, "anthropic");
         label = hasKey ? "Anthropic API key configured" : "Anthropic API key missing";
       } else if (this.apiProvider === "openai-compatible") {
-        hasKey = Boolean(this.plugin.settings.openaiApiKey);
+        hasKey = hasProviderApiKey(this.plugin.secretStorage, this.plugin.settings, "openai-compatible");
         label = hasKey ? "OpenAI API key configured" : "Keyless / Local server (Key optional)";
       } else if (this.apiProvider === "ollama") {
         hasKey = true;

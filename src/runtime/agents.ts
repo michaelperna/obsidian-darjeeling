@@ -1,4 +1,5 @@
 import { Platform } from "obsidian";
+import { hasProviderApiKey } from "../settings/secrets";
 import type { AgentDescriptor } from "../net/agentClient";
 import type DarjeelingPlugin from "../main";
 import { CANONICAL_PERMISSION_MODES } from "../models/permissions";
@@ -95,7 +96,7 @@ export async function refreshAgents(plugin: DarjeelingPlugin): Promise<AgentDesc
     key: "deepseek",
     label: "DeepSeek (Direct API)",
     binary: "deepseek",
-    available: Boolean(plugin.settings.deepseekApiKey || plugin.settings.providers?.deepseek),
+    available: hasProviderApiKey(plugin.secretStorage, plugin.settings, "deepseek"),
     version: "api",
     isApi: true,
     models: [
@@ -110,7 +111,7 @@ export async function refreshAgents(plugin: DarjeelingPlugin): Promise<AgentDesc
     key: "gemini",
     label: "Google Gemini (Direct API)",
     binary: "gemini",
-    available: Boolean(plugin.settings.geminiApiKey || plugin.settings.providers?.gemini),
+    available: hasProviderApiKey(plugin.secretStorage, plugin.settings, "gemini"),
     version: "api",
     isApi: true,
     models: [
@@ -124,7 +125,7 @@ export async function refreshAgents(plugin: DarjeelingPlugin): Promise<AgentDesc
     key: "anthropic",
     label: "Claude (Anthropic API)",
     binary: "anthropic",
-    available: Boolean(plugin.settings.anthropicApiKey || plugin.settings.providers?.anthropic),
+    available: hasProviderApiKey(plugin.secretStorage, plugin.settings, "anthropic"),
     version: "api",
     isApi: true,
     models: [

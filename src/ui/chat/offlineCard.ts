@@ -1,4 +1,5 @@
 import { Notice, Platform, setIcon } from "obsidian";
+import { hasProviderApiKey } from "../../settings/secrets";
 import type { DarjeelingChat } from "./chatView";
 import { setDeviceRuntime } from "../../runtime/router";
 
@@ -67,15 +68,10 @@ export function showRemoteOfflineCard(chat: DarjeelingChat, originalText: string
   }
 
   // Check if Direct API is configured
-  const activeProv = plugin.settings.activeProvider || "gemini";
-  const provConfig = plugin.settings.providers?.[activeProv];
-  const hasDirectApiKey = Boolean(
-    provConfig?.apiKeySecretId ||
-      plugin.settings.geminiApiKey ||
-      plugin.settings.anthropicApiKey ||
-      plugin.settings.openaiApiKey ||
-      activeProv === "ollama"
-  );
+  const activeProv = plugin.settings.directApiProvider || plugin.settings.activeProvider || "gemini";
+  const hasDirectApiKey =
+    activeProv === "ollama" ||
+    hasProviderApiKey(plugin.secretStorage, plugin.settings, activeProv);
 
   const directBtn = actions.createEl("button", {
     cls: "dj-btn dj-btn-sm",

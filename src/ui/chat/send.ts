@@ -5,7 +5,7 @@ import {
   sanitizeModelForHarness,
   setModelForHarness,
 } from "../../models/registry";
-import { clampToSupported } from "../../models/permissions";
+import { CANONICAL_PERMISSION_MODES, clampToSupported } from "../../models/permissions";
 import { isBypassConfirmedForConversation } from "../modals/confirm";
 import { getAgentPermissionModes } from "../../runtime/agents";
 import {
@@ -23,7 +23,28 @@ export interface QueuedTurn {
   badgeEl?: HTMLElement | null;
   cancelBtn?: HTMLElement | null;
   targetFile?: TFile | null;
-  modeOverride?: string | null;
+}
+
+/**
+ * The permission mode a turn will actually run with: bypass needs a
+ * confirmation for this conversation, and every mode must be supported by
+ * the agent.
+ */
+export function resolveEffectivePermissionMode(
+  requested: string,
+  agent: string,
+  conversationId: string | null | undefined
+): string {
+  if (requested === "bypassPermissions" && !isBypassConfirmedForConversation(conversationId)) {
+    return "plan";
+  }
+  return clampToSupported(requested, getAgentPermissionModes(agent));
+}
+
+function modeLabel(mode: string): string {
+  return (
+    (CANONICAL_PERMISSION_MODES as Record<string, { label: string }>)[mode]?.label ?? mode
+  );
 }
 
 export class TurnDispatcher {
@@ -143,9 +164,6 @@ export class TurnDispatcher {
 
     this.chat.scroll();
 
-    const modeOverride = this.chat.getModeOverride();
-    this.chat.setModeOverride(null);
-
     this.queuedTurns.push({
       id: turnId,
       text,
@@ -153,7 +171,6 @@ export class TurnDispatcher {
       badgeEl,
       cancelBtn,
       targetFile,
-      modeOverride,
     });
 
     this.updateQueueIndicator();
@@ -284,14 +301,13 @@ export class TurnDispatcher {
     next.badgeEl?.remove();
     next.cancelBtn?.remove();
 
-    await this.executeTurn(next.text, next.bubble, next.targetFile, next.modeOverride);
+    await this.executeTurn(next.text, next.bubble, next.targetFile);
   }
 
   async executeTurn(
     text: string,
     existingUserBubble?: LiveTurn,
-    overrideFile?: TFile | null,
-    modeOverride?: string | null
+    overrideFile?: TFile | null
   ): Promise<void> {
     this.chat.syncActiveEpoch();
     this.isPreparing = true;
@@ -484,15 +500,13 @@ export class TurnDispatcher {
       );
       const appendPrompt = harnessResult.systemPrompt;
 
-      let effectivePermissionMode =
-        modeOverride ?? this.chat.getModeOverride() ?? settings.permissionMode;
-
-      const conversationId = this.chat.getActiveConversationId?.() || client.getSessionId?.();
-      if (effectivePermissionMode === "bypassPermissions" && !isBypassConfirmedForConversation(conversationId)) {
-        effectivePermissionMode = "plan";
-      } else {
-        const supported = getAgentPermissionModes(settings.agent);
-        effectivePermissionMode = clampToSupported(effectivePermissionMode, supported);
+      const effectivePermissionMode = resolveEffectivePermissionMode(
+        settings.permissionMode,
+        settings.agent,
+        this.chat.getActiveConversationId()
+      );
+      if (effectivePermissionMode !== settings.permissionMode) {
+        await this.reportClampedMode(settings.permissionMode, effectivePermissionMode);
       }
 
       // Check right before network dispatch (CHAT-46)
@@ -516,7 +530,6 @@ export class TurnDispatcher {
         partial_messages: settings.partialMessages,
       });
 
-      this.chat.setModeOverride(null);
       if (sent) {
         this.chat.setBusy(true);
         this.chat.armTurnWatchdog(90000);
@@ -533,10 +546,27 @@ export class TurnDispatcher {
       this.isPreparing = false;
       this.chat.setBusy(false);
       this.chat.clearTurnWatchdog();
-      this.chat.setModeOverride(null);
       console.error("[Darjeeling] Turn execution error:", err);
       this.chat.errorNote(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  /**
+   * The turn will run in a different mode than the chip shows: say so, and
+   * move the chip to the real mode instead of silently running as plan.
+   */
+  private async reportClampedMode(requested: string, effective: string): Promise<void> {
+    const plugin = this.chat.getPlugin();
+    const reason =
+      requested === "bypassPermissions" && effective === "plan"
+        ? "bypass was not confirmed for this conversation"
+        : "the agent does not support it";
+    new Notice(
+      `Running as ${modeLabel(effective)}: ${modeLabel(requested)} is unavailable (${reason}).`
+    );
+    plugin.settings.permissionMode = effective;
+    await plugin.saveSettings();
+    this.chat.getView()?.updateModelChip();
   }
 
   checkModelSubstitution(asked: string, got?: string): void {

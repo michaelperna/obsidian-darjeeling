@@ -20,6 +20,7 @@ import {
   type ProviderModel,
   type ProviderCapabilities,
 } from "./providers";
+import { readProviderApiKey, type SecretStorage } from "../settings/secrets";
 
 export type { DirectChatMessage };
 
@@ -32,7 +33,7 @@ export class DirectApiRunner {
   private sessionId: string;
   private generationId = 0;
 
-  constructor(settings: DarjeelingSettings) {
+  constructor(settings: DarjeelingSettings, private secrets?: SecretStorage) {
     this.settings = settings;
     this.sessionId = this.newSessionId();
   }
@@ -98,11 +99,20 @@ export class DirectApiRunner {
     return this.settings.directApiProvider || "gemini";
   }
 
-  resolveConfig(provider: DirectApiProvider): ProviderConfig {
+  /** Provider config with the API key read from secret storage (ADR-05). */
+  async resolveConfig(provider: DirectApiProvider): Promise<ProviderConfig> {
+    const config = this.resolveBaseConfig(provider);
+    if (provider !== "ollama") {
+      config.apiKey = await readProviderApiKey(this.secrets, this.settings, provider);
+    }
+    return config;
+  }
+
+  private resolveBaseConfig(provider: DirectApiProvider): ProviderConfig {
     switch (provider) {
       case "gemini":
         return {
-          apiKey: this.settings.geminiApiKey?.trim() || "",
+          apiKey: "",
           baseUrl:
             this.settings.providers?.gemini?.baseUrl ||
             "https://generativelanguage.googleapis.com",
@@ -114,7 +124,7 @@ export class DirectApiRunner {
         };
       case "anthropic":
         return {
-          apiKey: this.settings.anthropicApiKey?.trim() || "",
+          apiKey: "",
           baseUrl:
             this.settings.providers?.anthropic?.baseUrl ||
             "https://api.anthropic.com",
@@ -126,7 +136,7 @@ export class DirectApiRunner {
         };
       case "deepseek":
         return {
-          apiKey: this.settings.deepseekApiKey?.trim() || "",
+          apiKey: "",
           baseUrl:
             this.settings.deepseekBaseUrl?.trim() ||
             this.settings.providers?.deepseek?.baseUrl ||
@@ -140,7 +150,7 @@ export class DirectApiRunner {
         };
       case "openai-compatible":
         return {
-          apiKey: this.settings.openaiApiKey?.trim() || "",
+          apiKey: "",
           baseUrl:
             this.settings.openaiBaseUrl?.trim() ||
             this.settings.providers?.openaiCompatible?.baseUrl ||
@@ -190,22 +200,35 @@ export class DirectApiRunner {
       return false;
     }
 
+    // Claim the runner before the (async) secret read so a second turn sent
+    // meanwhile is rejected rather than raced.
+    this.isRunning = true;
+    this.generationId++;
+    const currentGen = this.generationId;
+    this.activeAbortController = new AbortController();
+
     const provider = this.resolveProvider();
-    const config = this.resolveConfig(provider);
+    let config: ProviderConfig;
+    try {
+      config = await this.resolveConfig(provider);
+    } catch (err) {
+      config = this.resolveBaseConfig(provider);
+      console.warn("[Darjeeling] Could not read API key from secret storage:", err);
+    }
     const client = getProviderClient(provider);
+    if (this.generationId !== currentGen) {
+      return false; // interrupted while reading the key
+    }
 
     // OpenAI-compatible and Ollama allow keyless access (PD-40)
     if (provider !== "ollama" && provider !== "openai-compatible" && provider !== "openaiCompatible" && !config.apiKey) {
+      this.isRunning = false;
+      this.activeAbortController = null;
       this.handlers.onError?.(
         `API key not found for provider "${provider}". Please add it in Darjeeling Settings under "AI Engine & Runtime".`
       );
       return false;
     }
-
-    this.isRunning = true;
-    this.generationId++;
-    const currentGen = this.generationId;
-    this.activeAbortController = new AbortController();
 
     const candidateModel = options.model || getModelForHarness(this.settings, provider) || config.model;
     const modelName = sanitizeModelForHarness(provider, candidateModel);
@@ -308,7 +331,7 @@ export class DirectApiRunner {
    */
   async runBuffered(options: TurnOptions): Promise<AgentEvent[]> {
     const provider = this.resolveProvider();
-    const config = this.resolveConfig(provider);
+    const config = await this.resolveConfig(provider);
     const client = getProviderClient(provider);
 
     const start = Date.now();
@@ -360,14 +383,14 @@ export class DirectApiRunner {
     providerOverride?: DirectApiProvider
   ): Promise<{ ok: boolean; message: string; models?: ProviderModel[] }> {
     const provider = providerOverride || this.resolveProvider();
-    const config = this.resolveConfig(provider);
+    const config = await this.resolveConfig(provider);
     const client = getProviderClient(provider);
     return client.testConnection(config);
   }
 
   async listModels(providerOverride?: DirectApiProvider): Promise<ProviderModel[]> {
     const provider = providerOverride || this.resolveProvider();
-    const config = this.resolveConfig(provider);
+    const config = await this.resolveConfig(provider);
     const client = getProviderClient(provider);
     return client.listModels ? client.listModels(config) : [];
   }

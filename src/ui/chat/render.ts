@@ -5,6 +5,7 @@ import type { DarjeelingChat } from "./chatView";
 import { exportConversationToMarkdown } from "./export";
 import type { ToolCallDetail } from "./toolSheet";
 import { openDarjeelingSettings } from "../../settings/openSettings";
+import { hasProviderApiKey } from "../../settings/secrets";
 import { setDeviceRuntime } from "../../runtime/router";
 
 /**
@@ -276,7 +277,13 @@ export function renderEmptyState(chat: DarjeelingChat, messagesEl: HTMLElement):
     return;
   }
 
-  if (mode === "direct-api" && !plugin.settings.directApiKey?.trim()) {
+  const directProvider = plugin.settings.directApiProvider;
+  const directReady =
+    directProvider === "ollama" ||
+    directProvider === "openai-compatible" ||
+    directProvider === "openaiCompatible" ||
+    hasProviderApiKey(plugin.secretStorage, plugin.settings, directProvider);
+  if (mode === "direct-api" && !directReady) {
     const hero = messagesEl.createDiv({ cls: "dj-empty-hero is-not-configured" });
     const emblem = hero.createDiv({ cls: "dj-hero-emblem" });
     setIcon(emblem, "key");
@@ -554,11 +561,7 @@ export async function paintTurn(chat: DarjeelingChat, turn: LiveTurn): Promise<v
   turn.renderComponent = child;
   turn.lastRenderedText = turn.text;
 
-  if (typeof turn.bodyEl.empty === "function") {
-    turn.bodyEl.empty();
-  } else {
-    turn.bodyEl.innerHTML = "";
-  }
+  turn.bodyEl.empty();
 
   const plugin = chat.getPlugin();
   const safeMarkdown = sanitizeUntrustedMarkdown(turn.text);

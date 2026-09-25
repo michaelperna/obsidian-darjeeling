@@ -142,3 +142,16 @@ test("Sync Rule 5: shouldPromptRuntimeChoice checks device settings", () => {
   assert.equal(shouldPromptRuntimeChoice(dummySettings, mockAppUnset), true);
   assert.equal(shouldPromptRuntimeChoice(dummySettings, mockAppSet), false);
 });
+
+test("migrateSettings moves a v0 deepseekApiKey and blanks it (migrate.ts deepseek gap)", async () => {
+  const secrets = new MockSecretStorage();
+  const migrated = await migrateSettings(
+    { deepseekApiKey: "sk-ds-own-field", directApiProvider: "deepseek" },
+    secrets
+  );
+  assert.equal(migrated.deepseekApiKey, "");
+  assert.equal(migrated.directApiProvider, "deepseek");
+  const id = migrated.providers.deepseek.apiKeySecretId;
+  assert.ok(id);
+  assert.equal(await secrets.getSecret(id), "sk-ds-own-field");
+});

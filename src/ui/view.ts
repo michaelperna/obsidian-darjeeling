@@ -26,6 +26,7 @@ import { DarjeelingNewSessionModal, SessionTarget } from "./modals/newSessionMod
 import { DARJEELING_ICON } from "./icons";
 import { writeClipboard } from "./terminal/clipboard";
 import { ViewMode } from "../settings/schema";
+import { hasProviderApiKey } from "../settings/secrets";
 import {
   getModelForHarness,
   sanitizeModelForHarness,
@@ -486,18 +487,9 @@ export class DarjeelingView extends ItemView {
       }
     } else if (mode === "direct-api") {
       const provider = this.plugin.settings.directApiProvider;
-      let hasKey = false;
-      if (provider === "gemini") {
-        hasKey = Boolean(this.plugin.settings.geminiApiKey || this.plugin.settings.providers?.gemini?.apiKeySecretId);
-      } else if (provider === "anthropic") {
-        hasKey = Boolean(this.plugin.settings.anthropicApiKey || this.plugin.settings.providers?.anthropic?.apiKeySecretId);
-      } else if (provider === "deepseek") {
-        hasKey = Boolean(this.plugin.settings.deepseekApiKey || this.plugin.settings.providers?.deepseek?.apiKeySecretId);
-      } else if (provider === "openai-compatible" || provider === "openaiCompatible") {
-        hasKey = Boolean(this.plugin.settings.openaiApiKey || this.plugin.settings.providers?.openaiCompatible?.apiKeySecretId);
-      } else if (provider === "ollama") {
-        hasKey = true;
-      }
+      const hasKey =
+        provider === "ollama" ||
+        hasProviderApiKey(this.plugin.secretStorage, this.plugin.settings, provider);
       if (hasKey) {
         cls = "is-connected";
         label = "Ready";

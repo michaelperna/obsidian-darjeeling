@@ -1,6 +1,55 @@
 import { Setting } from "obsidian";
 import type { DarjeelingSettingTab } from "../tab";
 import type { DirectApiProvider } from "../schema";
+import { hasProviderApiKey, writeProviderApiKey } from "../secrets";
+
+/**
+ * API key field backed by secret storage (ADR-05). The key is never shown or
+ * copied into settings; the field only reports whether one is saved.
+ */
+function addApiKeyField(
+  tab: DarjeelingSettingTab,
+  containerEl: HTMLElement,
+  provider: DirectApiProvider,
+  name: string,
+  desc: string,
+  placeholder: string
+): void {
+  const plugin = tab.plugin;
+  const saved = () => hasProviderApiKey(plugin.secretStorage, plugin.settings, provider);
+  const setting = new Setting(containerEl).setName(name);
+  const describe = () => {
+    setting.setDesc(
+      saved()
+        ? `${desc} A key is saved in secret storage on this device. Type a new one to replace it.`
+        : `${desc} Stored in secret storage on this device, never in data.json.`
+    );
+  };
+  describe();
+  setting.addText((text) => {
+    text
+      .setPlaceholder(saved() ? "Saved (hidden)" : placeholder)
+      .setValue("")
+      .onChange(async (val) => {
+        if (!val.trim()) return; // removing a key is explicit (button below)
+        await writeProviderApiKey(plugin.secretStorage, plugin.settings, provider, val);
+        await plugin.saveSettings();
+        describe();
+      });
+    text.inputEl.type = "password";
+    text.inputEl.autocomplete = "off";
+  });
+  setting.addExtraButton((btn) =>
+    btn
+      .setIcon("trash")
+      .setTooltip("Remove saved key")
+      .onClick(async () => {
+        await writeProviderApiKey(plugin.secretStorage, plugin.settings, provider, "");
+        await plugin.saveSettings();
+        tab.display();
+      })
+  );
+}
 
 export function displayDirectApiSettings(
   tab: DarjeelingSettingTab,
@@ -38,19 +87,14 @@ export function displayDirectApiSettings(
     );
 
   if (plugin.settings.directApiProvider === "deepseek") {
-    new Setting(containerEl)
-      .setName("DeepSeek API key")
-      .setDesc("DeepSeek official platform API key (sk-...).")
-      .addText((text) => {
-        text
-          .setPlaceholder("sk-...")
-          .setValue(plugin.settings.deepseekApiKey)
-          .onChange(async (val) => {
-            plugin.settings.deepseekApiKey = val.trim();
-            await plugin.saveSettings();
-          });
-        text.inputEl.type = "password";
-      });
+    addApiKeyField(
+      tab,
+      containerEl,
+      "deepseek",
+      "DeepSeek API key",
+      "DeepSeek official platform API key (sk-...).",
+      "sk-..."
+    );
 
     new Setting(containerEl)
       .setName("DeepSeek model")
@@ -80,19 +124,14 @@ export function displayDirectApiSettings(
           })
       );
   } else if (plugin.settings.directApiProvider === "gemini") {
-    new Setting(containerEl)
-      .setName("Gemini API key")
-      .setDesc("Google AI Studio API key. Direct, ultra-fast, massive vault context.")
-      .addText((text) => {
-        text
-          .setPlaceholder("AIzaSy...")
-          .setValue(plugin.settings.geminiApiKey)
-          .onChange(async (val) => {
-            plugin.settings.geminiApiKey = val.trim();
-            await plugin.saveSettings();
-          });
-        text.inputEl.type = "password";
-      });
+    addApiKeyField(
+      tab,
+      containerEl,
+      "gemini",
+      "Gemini API key",
+      "Google AI Studio API key.",
+      "AIzaSy..."
+    );
     new Setting(containerEl)
       .setName("Gemini model")
       .setDesc("Model ID (default: gemini-3.8-flash).")
@@ -106,19 +145,14 @@ export function displayDirectApiSettings(
           })
       );
   } else if (plugin.settings.directApiProvider === "anthropic") {
-    new Setting(containerEl)
-      .setName("Anthropic API key")
-      .setDesc("Anthropic API key for direct Claude calls.")
-      .addText((text) => {
-        text
-          .setPlaceholder("sk-ant-api03-...")
-          .setValue(plugin.settings.anthropicApiKey)
-          .onChange(async (val) => {
-            plugin.settings.anthropicApiKey = val.trim();
-            await plugin.saveSettings();
-          });
-        text.inputEl.type = "password";
-      });
+    addApiKeyField(
+      tab,
+      containerEl,
+      "anthropic",
+      "Anthropic API key",
+      "Anthropic API key for direct Claude calls.",
+      "sk-ant-api03-..."
+    );
     new Setting(containerEl)
       .setName("Anthropic model")
       .setDesc("Model ID (default: claude-opus-5).")
@@ -157,19 +191,14 @@ export function displayDirectApiSettings(
           })
       );
   } else if (plugin.settings.directApiProvider === "openai-compatible") {
-    new Setting(containerEl)
-      .setName("API key")
-      .setDesc("OpenAI or OpenRouter API key.")
-      .addText((text) => {
-        text
-          .setPlaceholder("sk-...")
-          .setValue(plugin.settings.openaiApiKey)
-          .onChange(async (val) => {
-            plugin.settings.openaiApiKey = val.trim();
-            await plugin.saveSettings();
-          });
-        text.inputEl.type = "password";
-      });
+    addApiKeyField(
+      tab,
+      containerEl,
+      "openai-compatible",
+      "API key",
+      "OpenAI or OpenRouter API key.",
+      "sk-..."
+    );
     new Setting(containerEl)
       .setName("Base URL")
       .setDesc("Endpoint URL (e.g. https://api.openai.com/v1 or https://openrouter.ai/api/v1).")

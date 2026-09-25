@@ -94,7 +94,7 @@ describe("Runtime router & continuity mechanics", () => {
       },
       agentClient: {
         getEffectiveRuntimeMode: () => "remote",
-        getBaseUrl: () => "http://100.101.102.103:8765",
+        getBaseUrl: () => "http://100.64.0.12:8765",
         getAuthToken: () => "token",
       },
     };
@@ -125,7 +125,7 @@ describe("Runtime router & continuity mechanics", () => {
       },
       agentClient: {
         getEffectiveRuntimeMode: () => "remote",
-        getBaseUrl: () => "http://100.101.102.103:8765",
+        getBaseUrl: () => "http://100.64.0.12:8765",
         getAuthToken: () => "token",
       },
     };

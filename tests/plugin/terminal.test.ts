@@ -106,7 +106,6 @@ function createTestHarness() {
   settings.activeTerminalProfileId = "remote-test";
   settings.meshnetHost = "127.0.0.1";
   settings.port = 8765;
-  settings.authToken = "secret-token-123";
   settings.sessionName = "darjeeling";
 
   const plugin: any = {
@@ -122,6 +121,7 @@ function createTestHarness() {
       },
     },
     settings,
+    agentClient: { getAuthToken: () => "secret-token-123" },
     saveSettings: async () => {},
   };
 

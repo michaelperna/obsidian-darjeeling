@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import { DarjeelingChat } from "../../src/ui/chat/chatView";
 import type { StreamResult } from "../../src/net/agentClient";
 import { createDefaultSettings } from "../../src/settings/schema";
-import { Component, Notice } from "./stubs/obsidian";
+import { Component, Notice, notices, resetNotices } from "./stubs/obsidian";
+import { AgentClient } from "../../src/net/agentClient";
+import {
+  clearBypassConfirmed,
+  setBypassConfirmedForConversation,
+} from "../../src/ui/modals/confirm";
+import { resolveEffectivePermissionMode } from "../../src/ui/chat/send";
 
 function makeDomElement(tag = "div"): any {
   const el: any = {
@@ -190,6 +196,7 @@ function createTestHarness() {
       return true;
     },
     resetConversation: () => {},
+    getConversationKey: () => "conv-test",
   };
 
   const hostEl = makeDomElement("div");
@@ -377,4 +384,64 @@ test("dispatcher.executeTurn() syncs active epoch even when invoked directly", a
   const activeTurn = chat.getActiveTurn();
   assert.notEqual(activeTurn, null);
   assert.ok(activeTurn!.text.includes("Direct turn answered"));
+});
+
+test("bypass on a brand-new chat: confirmation keyed to the client conversation id is honoured", async () => {
+  clearBypassConfirmed();
+  resetNotices();
+  const { chat, plugin, getSentTurns } = createTestHarness();
+  plugin.settings.agent = "claude";
+  plugin.settings.permissionMode = "bypassPermissions";
+
+  // The conversation id exists before any agent session id does.
+  const convId = chat.getActiveConversationId();
+  assert.equal(convId, "conv-test");
+  assert.equal(plugin.settings.lastAgentSessionId, "");
+  setBypassConfirmedForConversation(convId);
+
+  await chat.executeTurn("rm the temp files");
+  assert.equal(getSentTurns()[0].permission_mode, "bypassPermissions");
+  assert.equal(plugin.settings.permissionMode, "bypassPermissions");
+  assert.ok(!notices.some((n) => n.startsWith("Running as")));
+  chat.clearTurnWatchdog();
+  clearBypassConfirmed();
+});
+
+test("clamped mode is never silent: Notice + chip moves to the real mode", async () => {
+  clearBypassConfirmed();
+  resetNotices();
+  const { chat, plugin, getSentTurns } = createTestHarness();
+  let chipUpdates = 0;
+  (chat as any).view = { updateModelChip: () => chipUpdates++ };
+  plugin.settings.agent = "claude";
+  plugin.settings.permissionMode = "bypassPermissions"; // chip says Bypass, never confirmed
+
+  await chat.executeTurn("do something");
+  assert.equal(getSentTurns()[0].permission_mode, "plan");
+  assert.equal(plugin.settings.permissionMode, "plan");
+  assert.ok(chipUpdates > 0, "chip refreshed to the effective mode");
+  assert.ok(notices.some((n) => n.startsWith("Running as Plan only")));
+  chat.clearTurnWatchdog();
+});
+
+test("resolveEffectivePermissionMode clamps unsupported modes", () => {
+  clearBypassConfirmed();
+  assert.equal(resolveEffectivePermissionMode("bypassPermissions", "claude", "c1"), "plan");
+  setBypassConfirmedForConversation("c1");
+  assert.equal(resolveEffectivePermissionMode("bypassPermissions", "claude", "c1"), "bypassPermissions");
+  assert.equal(resolveEffectivePermissionMode("bypassPermissions", "agy", "c1"), "plan");
+  assert.equal(resolveEffectivePermissionMode("acceptEdits", "agy", "c1"), "acceptEdits");
+  clearBypassConfirmed();
+});
+
+test("AgentClient mints a conversation key at start and a new one per conversation", () => {
+  const settings = createDefaultSettings();
+  settings.runtimeMode = "direct-api";
+  const client = new AgentClient(settings);
+  const first = client.getConversationKey();
+  assert.ok(first);
+  assert.equal(client.getSessionId() !== first, true);
+  client.resetConversation();
+  assert.notEqual(client.getConversationKey(), first);
+  client.destroy();
 });

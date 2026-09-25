@@ -74,7 +74,7 @@ export async function runRemoteDiagnostics(
 ): Promise<void> {
   const plugin = tab.plugin;
   const base = plugin.agentClient?.getBaseUrl?.() ?? `http://${plugin.settings.meshnetHost}:${plugin.settings.port}`;
-  const authToken = plugin.agentClient?.getAuthToken?.() ?? plugin.settings.authToken;
+  const authToken = plugin.agentClient?.getAuthToken?.() ?? "";
   const lines: string[] = [];
   let isWarn = false;
 

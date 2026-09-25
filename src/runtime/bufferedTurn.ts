@@ -15,7 +15,7 @@ export async function runBufferedTurn(
   options: TurnOptions
 ): Promise<AgentEvent[] | null> {
   const requestedMode = options.permission_mode ?? plugin.settings.permissionMode;
-  const conversationId = options.resume ?? plugin.settings.lastAgentSessionId;
+  const conversationId = plugin.agentClient?.getConversationKey?.() ?? null;
   let clampedMode: CanonicalPermissionMode;
 
   if (requestedMode === "bypassPermissions" && !isBypassConfirmedForConversation(conversationId)) {
@@ -35,7 +35,7 @@ export async function runBufferedTurn(
   }
 
   const baseUrl = plugin.agentClient?.getBaseUrl?.() ?? `http://${plugin.settings.meshnetHost}:${plugin.settings.port}`;
-  const authToken = plugin.agentClient?.getAuthToken?.() ?? plugin.settings.authToken;
+  const authToken = plugin.agentClient?.getAuthToken?.() ?? "";
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (authToken) {

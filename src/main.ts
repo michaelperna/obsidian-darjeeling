@@ -16,7 +16,15 @@ import {
   type ViewMode,
 } from "./settings/schema";
 import { migrateSettings } from "./settings/migrate";
-import { SecretStorage } from "./settings/secrets";
+import {
+  SecretStorage,
+  activeTokenSecretId,
+  containsPlaintextSecrets,
+  emptyRetained,
+  hasRetained,
+  serializeSettings,
+  type RetainedPlaintext,
+} from "./settings/secrets";
 import { DarjeelingSettingTab } from "./settings/tab";
 import { VaultHarness } from "./vault/harness";
 import { SessionManager } from "./net/sessionManager";
@@ -52,6 +60,8 @@ export default class DarjeelingPlugin extends Plugin {
   plan: DarjeelingPlanPanel | null = null;
 
   availableAgents: AgentDescriptor[] = [];
+  /** Legacy plaintext that could not be stored durably yet (never deleted early). */
+  private retainedPlaintext: RetainedPlaintext = emptyRetained();
   deviceStore: Record<string, string> = {};
 
   get modelRegistry() {
@@ -134,19 +144,21 @@ export default class DarjeelingPlugin extends Plugin {
 
     this.planStore = new PlanStore(this);
     this.vaultHarness = new VaultHarness(this.app, this.settings);
-    this.sessionManager = new SessionManager(this.settings);
+    this.sessionManager = new SessionManager(
+      this.settings,
+      () => this.agentClient?.getAuthToken() ?? ""
+    );
 
     let vaultPath = "";
     if (this.app.vault.adapter instanceof FileSystemAdapter) {
       vaultPath = this.app.vault.adapter.getBasePath();
     }
-    this.agentClient = new AgentClient(this.settings, vaultPath, this.app);
+    this.agentClient = new AgentClient(this.settings, vaultPath, this.app, this.secretStorage);
 
-    const activeHost = this.settings.hosts?.find((h) => h.id === this.settings.activeHostId);
-    const tokenSecretId = activeHost?.tokenSecretId || "dj_token";
-    void this.secretStorage?.getSecret(tokenSecretId).then((tok) => {
-      if (tok && this.agentClient) this.agentClient.setAuthToken(tok);
-    });
+    // Secrets were primed in loadSettings; hand the host token to the client
+    // (memory only, never mirrored into settings).
+    const tok = this.secretStorage.peek(activeTokenSecretId(this.settings));
+    if (tok) this.agentClient.adoptAuthToken(tok);
 
     this.registerView(
       DARJEELING_VIEW_TYPE,
@@ -363,11 +375,27 @@ export default class DarjeelingPlugin extends Plugin {
   async loadSettings(): Promise<void> {
     this.secretStorage = new SecretStorage(this.app);
     const stored = ((await this.loadData()) ?? {}) as Record<string, unknown>;
+    this.retainedPlaintext = emptyRetained();
     this.settings = await migrateSettings(
       stored,
       this.secretStorage,
       this.app,
-      this.settings
+      this.settings,
+      this.retainedPlaintext
+    );
+    await this.secretStorage.prime(this.settings);
+    // Copy -> verify -> delete: once secrets are verified in secret storage,
+    // rewrite data.json without the plaintext copies.
+    if (containsPlaintextSecrets(stored) && !this.settings._readOnly) {
+      await this.saveData(serializeSettings(this.settings, this.retainedPlaintext));
+    }
+  }
+
+  /** What saveSettings writes to data.json: settings minus every secret. */
+  serializeForDisk(): Record<string, unknown> {
+    return serializeSettings(
+      this.settings,
+      hasRetained(this.retainedPlaintext) ? this.retainedPlaintext : undefined
     );
   }
 
@@ -375,7 +403,7 @@ export default class DarjeelingPlugin extends Plugin {
     if (this.settings._readOnly) {
       return;
     }
-    await this.saveData(this.settings);
+    await this.saveData(this.serializeForDisk());
     this.vaultHarness?.updateSettings(this.settings);
     this.sessionManager?.updateSettings(this.settings);
     this.agentClient?.updateSettings(this.settings);

@@ -19,16 +19,16 @@ describe("AgentClient transport & protocol v2", () => {
 
   it("connects with auth token in subprotocol and formats websocket url", () => {
     const settings = createMockSettings({
-      meshnetHost: "100.101.102.103",
+      meshnetHost: "100.64.0.12",
       port: 8765,
-      authToken: "my-secret-token",
     });
     const client = new AgentClient(settings);
+    client.adoptAuthToken("my-secret-token");
     client.connect();
 
     assert.equal(fakeWs.sockets.length, 1);
     const sock = fakeWs.last!;
-    assert.equal(sock.url, "ws://100.101.102.103:8765/ws/agent");
+    assert.equal(sock.url, "ws://100.64.0.12:8765/ws/agent");
     assert.deepEqual(sock.protocols, ["darjeeling.token.my-secret-token"]);
     assert.equal(client.connectionState, "connecting");
 
@@ -39,7 +39,7 @@ describe("AgentClient transport & protocol v2", () => {
 
   it("reconnects when host or connection snapshot changes", () => {
     const settings = createMockSettings({
-      meshnetHost: "100.101.102.103",
+      meshnetHost: "100.64.0.12",
       port: 8765,
     });
     const client = new AgentClient(settings);
@@ -227,7 +227,7 @@ describe("AgentClient transport & protocol v2", () => {
 
   it("checks /health protocol compatibility", async () => {
     const settings = createMockSettings({
-      meshnetHost: "100.101.102.103",
+      meshnetHost: "100.64.0.12",
       port: 8765,
     });
     const client = new AgentClient(settings);
@@ -276,11 +276,11 @@ describe("AgentClient transport & protocol v2", () => {
 
   it("startAsyncTurn, pollTurn, and pushFile send correct HTTP payloads", async () => {
     const settings = createMockSettings({
-      meshnetHost: "100.101.102.103",
+      meshnetHost: "100.64.0.12",
       port: 8765,
-      authToken: "secret",
     });
     const client = new AgentClient(settings);
+    client.adoptAuthToken("secret");
 
     let lastRequest: any = null;
     setRequestUrlHandler(async (req) => {
