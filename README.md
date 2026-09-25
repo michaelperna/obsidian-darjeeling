@@ -33,7 +33,7 @@ Project Darjeeling is an Obsidian plugin and companion server daemon designed to
 * **Self-Hosters & Homelabbers**: You run a dedicated Linux machine, VPS, or tethered workstation and want to offload heavy agent compilation and turn processing.
 * **Multi-Device Thinkers**: You plan initiatives on desktop and review or follow up on progress from your phone or tablet on the go.
 
-### Who It Is NOT For (F-36)
+### Who It Is NOT For
 * If you only want to converse with Claude on your phone and do not use Obsidian or have a repository to inspect, you do not need Darjeeling. Use the official [Claude iOS/Android app](https://claude.ai) or Anthropic's Remote Control feature.
 
 ---
@@ -70,13 +70,13 @@ Claude / DeepSeek / Ollama    & PTY in Vault Root           Daemon (Port 8765)
 
 | Runtime Mode | Supported Platforms | Shell & Tools | Session Resumption | Notes & Canvas Export | Status |
 |---|---|---|---|---|---|
-| **Remote Companion Server** | Linux Host<br>(Client: macOS, iOS, Android, Linux, Windows) | Yes (Full bash & tmux) | Yes (Protocol v2 async turn recovery) | Yes | **Stable** (v1.0) |
+| **Remote Companion Server** | Linux Host<br>(Client: macOS, Linux, Windows, iOS, iPadOS, Android) | Yes (Full bash & tmux) | Yes (Protocol v2 async turn recovery) | Yes | **Stable** (v1.0) |
 | **Desktop Local Mode** | macOS, Linux Desktop | Yes (Local PTY) | Process lifetime | Yes | **Stable** (v1.0) |
-| **Direct Provider API** | macOS, iOS, Android, Linux, Windows | No (Completion only) | No | Yes | **Stable** (v1.0) |
+| **Direct Provider API** | macOS, Linux, Windows, iOS, iPadOS, Android | No (Completion only) | No | Yes | **Stable** (v1.0) |
 
 > [!NOTE]
-> **Agent Support**: Claude Code (`claude`, tested versions `0.2.29`–`0.2.32`) is the primary supported agent CLI. Support for Google Antigravity (`agy`) and DeepSeek CLI is **Experimental** (G-55).
-> **Platform Testing**: macOS and Linux are verified in automated test suites; Windows desktop and iOS are marked untested in 1.0 (OD-13, G-57).
+> **Agent Support**: Claude Code (`claude`, tested versions `0.2.29`–`0.2.32`) is the primary supported agent CLI. Support for Google Antigravity (`agy`) and DeepSeek CLI is **Experimental**.
+> **Platforms**: Tested on macOS and Linux. Windows, iOS, Android and iPadOS are supported.
 
 ---
 
@@ -84,17 +84,19 @@ Claude / DeepSeek / Ollama    & PTY in Vault Root           Daemon (Port 8765)
 
 ### Option 1: Remote Companion Server (4 Steps)
 
-1. **Install Server Daemon** on your Linux host (Debian 12/13 or Ubuntu 22.04/24.04):
-<!-- not-run: installation command -->
+1. **Install Server Daemon** on your Linux host (Debian 12/13 or Ubuntu 22.04/24.04). Download the installer, the server tarball and `SHA256SUMS` from the [latest release](https://github.com/michaelperna/obsidian-darjeeling/releases/latest), verify, then run:
 ```bash
-sudo bash server/install.sh --yes --network auto
+VER=1.0.4
+BASE=https://github.com/michaelperna/obsidian-darjeeling/releases/download/$VER
+curl -fsSL -O "$BASE/install.sh" -O "$BASE/darjeeling-server-$VER.tar.gz" -O "$BASE/SHA256SUMS"
+sha256sum --ignore-missing -c SHA256SUMS
+sudo bash install.sh --yes --network auto
 ```
-2. **Authenticate Agent** as the service user (QA-34):
-<!-- not-run: operational command -->
+2. **Authenticate Agent** as the service user (the installer prints this command, with the full path to `claude` if it is not on the service user's `PATH`):
 ```bash
-sudo -u darjeeling -i claude login
+sudo runuser -u darjeeling -- claude login
 ```
-3. **Pair Device**: In desktop Obsidian, open **Settings > Darjeeling > Connections** to view your pairing QR code, or run `darjeeling pair` on the server and enter the 8-digit code.
+3. **Pair Device**: Run `sudo darjeeling pair` on the server (the installer also prints a code), then enter the 8-digit code in Obsidian under **Settings > Darjeeling > Connections**. A paired desktop can generate codes for your other devices.
 4. **Synchronize Vault**: Configure Syncthing, git, or Obsidian Headless Sync between your devices and `/var/lib/darjeeling/vault` (remembering to **exclude `.obsidian/` in both directions**).
 
 *Full installation details: [Server Installation Guide](docs/install-server.md).*
@@ -149,8 +151,8 @@ Every outbound network call site is audited and accounted for. Outbound network 
 ## Processes & Filesystem Access
 
 * **Local Mode**: Runs child processes directly under your personal user account. Subprocesses have access to your vault directory according to the selected permission mode.
-* **Companion Server Mode**: Runs as an unprivileged dedicated service user (`darjeeling`) with sandboxed systemd permissions (`ProtectSystem=strict`).
-* **Vault Code Path Isolation (G-30, ADR-25)**: Sync engines must exclude `.obsidian/` in both directions so that server-side file edits can never write untrusted plugins or snippets to connected client devices.
+* **Companion Server Mode**: Runs as an unprivileged dedicated service user (`darjeeling`) with systemd hardening (`NoNewPrivileges=yes`, `ProtectSystem=full`).
+* **Vault Code Path Isolation**: Sync engines must exclude `.obsidian/` in both directions so that server-side file edits can never write untrusted plugins or snippets to connected client devices.
 
 ---
 

@@ -6,55 +6,74 @@ This document describes how to install, configure, verify, upgrade, and maintain
 
 ## 1. Supported Operating Systems & Architecture
 
-Darjeeling companion daemon is supported on 64-bit architectures: `x86_64` (GA) and `aarch64` / `arm64` (Beta per OC-15), running:
+Darjeeling companion daemon is supported on 64-bit architectures: `x86_64` (GA) and `aarch64` / `arm64` (Beta), running:
 * **Debian 12 ("Bookworm")** and **Debian 13 ("Trixie")**
 * **Ubuntu 22.04 LTS ("Jammy")**, **Ubuntu 24.04 LTS ("Noble")**, and **Ubuntu 26.04 LTS**
 
 ### Minimum Requirements
 * Systemd service manager
 * Python 3.10 or newer (with `python3-venv`)
-* Dedicated unprivileged user account (default: `darjeeling`)
+* Dedicated unprivileged user account (default: `darjeeling`, created by the installer)
 * 1 GB available RAM (2 GB+ recommended for concurrent agent turns)
 
 ---
 
 ## 2. Prerequisites
 
-Install system dependencies via `apt-get`:
+Install the tools used to download and verify the release (the installer adds `tmux`, `iproute2` and the rest itself):
 
 ```bash
-sudo apt-get update && sudo apt-get install -y curl python3 python3-venv systemd
+sudo apt-get update && sudo apt-get install -y ca-certificates curl git python3 python3-venv
 ```
+
+`git` is only needed if you install from a clone instead of a release download.
 
 ---
 
-## 3. Quick Start Installation
+## 3. Installation
 
-Clone the repository or download the release distribution:
+### Option A: Release download (recommended)
 
-<!-- not-run: provided by host or lab runner -->
-```bash
-git clone https://github.com/darjeeling-agent/darjeeling.git /opt/darjeeling
-```
-
-Run the official installer script with desired options:
+Every release on [github.com/michaelperna/obsidian-darjeeling/releases](https://github.com/michaelperna/obsidian-darjeeling/releases) ships a stamped `install.sh`, a reproducible server tarball `darjeeling-server-<version>.tar.gz`, and a `SHA256SUMS` file covering every asset.
 
 ```bash
-sudo bash /home/tester/darjeeling/server/install.sh --yes --network loopback
+VER=1.0.4
+BASE="https://github.com/michaelperna/obsidian-darjeeling/releases/download/${VER}"
+mkdir -p ~/darjeeling-install && cd ~/darjeeling-install
+curl -fsSL -O "${BASE}/install.sh" -O "${BASE}/darjeeling-server-${VER}.tar.gz" -O "${BASE}/SHA256SUMS"
+sha256sum --ignore-missing -c SHA256SUMS
+sudo bash install.sh --yes --network auto
 ```
 
-> [!NOTE]
-> If installing outside of the test lab, run `sudo bash server/install.sh --yes --network auto` or select your overlay network (`--network tailscale` or `--network meshnet`).
+`sha256sum` must print `OK` for both files before you run anything. The stamped `install.sh` carries the version and the tarball's SHA-256, picks up the tarball sitting next to it, and checks the hash again before extracting.
+
+Pick the network mode that matches your host: `--network tailscale`, `--network meshnet`, `--network wireguard`, `--network lan` or `--network loopback`. See [Networking](networking.md).
+
+### Option B: Install from a git clone
+
+Clone the repository somewhere that is **not** under `/opt/darjeeling` (the installer owns that tree), check out a release tag, and run the installer from the checkout:
+
+```bash
+git clone https://github.com/michaelperna/obsidian-darjeeling.git ~/obsidian-darjeeling
+cd ~/obsidian-darjeeling
+git checkout 1.0.4
+sudo bash server/install.sh --yes --network auto
+```
+
+The version comes from `server/VERSION` in the checkout.
 
 ### What the Installer Configures
-The installer executes an idempotent, audited setup:
-1. **Service User**: Creates the dedicated system service user `darjeeling` (`--user <name>`) with home directory `/var/lib/darjeeling` and shell disabled.
-2. **Virtual Environment**: Provisions an isolated Python virtual environment at `/opt/darjeeling/current/venv` with pinned dependencies.
-3. **Master Authentication Token**: Generates a 256-bit cryptographically secure token at `/var/lib/darjeeling/.token` (read-only for the service user, mode `0600`).
-4. **Configuration**: Writes service environment variables to `/etc/darjeeling/darjeeling.env`.
-5. **Systemd Service**: Deploys `/etc/systemd/system/darjeeling.service` configured with sandboxing directives (`ProtectSystem=strict`, `ProtectHome=read-only`, `NoNewPrivileges=yes`, `PrivateTmp=yes`).
-6. **Hardware Rules (Laptop Mode)**: Installs `/etc/udev/rules.d/99-darjeeling-battery.rules` on supported hardware to allow setting battery charge thresholds without root.
-7. **Service Activation**: Enables and starts `darjeeling.service` on port `8765`.
+The installer is idempotent; re-running it keeps your token, configuration and paired devices.
+1. **Service User**: Creates the system user `darjeeling` (`--user <name>`) with home directory `/var/lib/darjeeling`. Its login shell is `/bin/bash` so the remote terminal works; it has no sudo rights.
+2. **Release Layout**: Installs the server to `/opt/darjeeling/releases/<version>`, points `/opt/darjeeling/current` at it, and links `/usr/local/bin/darjeeling` to the management CLI.
+3. **Virtual Environment**: Builds `/opt/darjeeling/releases/<version>/venv` from the hash-pinned `requirements.lock`.
+4. **Authentication Token**: Generates a 256-bit token (64 hex characters) at `/var/lib/darjeeling/.token`, owned by the service user, mode `0600`. An existing token is never replaced.
+5. **Configuration**: Writes `/etc/darjeeling/darjeeling.env` (`root:darjeeling`, mode `0640`). API keys are kept out of it: a DeepSeek key lives in `/var/lib/darjeeling/secrets/deepseek_api_key` (mode `0600`).
+6. **Permission Ceiling**: New installs use `DARJEELING_PERMISSION_CEILING=acceptEdits`. The installer never raises an existing value. See [Permission ceiling](#6-permission-ceiling).
+7. **Systemd Services**: Deploys `darjeeling.service` and `darjeeling-tmux.service` running as the service user with `NoNewPrivileges=yes` and `ProtectSystem=full`, `HOME` set to the service user's home.
+8. **Claude Code**: Installs Claude Code for the service user (`--claude skip` to opt out) and writes root-owned managed settings to `/etc/claude-code/managed-settings.json`.
+9. **Laptop Mode** (`--laptop`): Ignores the lid switch and installs `/etc/udev/rules.d/99-darjeeling-battery.rules` so battery charge thresholds can be set without root.
+10. **Service Activation**: Enables and starts the services on port `8765`, waits for `/health`, and prints an 8-digit pairing code and the `claude login` command for the service user.
 
 ---
 
@@ -66,16 +85,29 @@ Verify that the systemd service is active:
 systemctl is-active darjeeling.service
 ```
 
-Query the unauthenticated health endpoint:
+Query the unauthenticated health endpoint (the reported version must match the release you installed):
 
 ```bash
 curl -fsS http://127.0.0.1:8765/health
+darjeeling version
 ```
 
 Query the authenticated `/api/agents` endpoint using the generated bearer token:
 
 ```bash
-curl -fsS -H "Authorization: Bearer $(cat /var/lib/darjeeling/.token)" http://127.0.0.1:8765/api/agents
+curl -fsS -H "Authorization: Bearer $(sudo cat /var/lib/darjeeling/.token)" http://127.0.0.1:8765/api/agents
+```
+
+Log in Claude Code as the service user (the installer prints the exact command; use the full path `/var/lib/darjeeling/.local/bin/claude` if `claude` is not on the service user's `PATH`):
+
+```bash
+sudo runuser -u darjeeling -- claude login
+```
+
+Create a pairing code for a new device (valid for 10 minutes; see [Pairing](pairing.md)):
+
+```bash
+sudo darjeeling pair
 ```
 
 ---
@@ -84,9 +116,8 @@ curl -fsS -H "Authorization: Bearer $(cat /var/lib/darjeeling/.token)" http://12
 
 You can review all options by passing `--help`:
 
-<!-- not-run: informational command -->
 ```bash
-sudo bash install.sh --help
+bash install.sh --help
 ```
 
 | Flag | Argument | Default | Description |
@@ -96,87 +127,117 @@ sudo bash install.sh --help
 | `--network` | `<mode>` | `auto` | Network detection mode: `auto`, `tailscale`, `meshnet`, `wireguard`, `lan`, or `loopback`. |
 | `--bind` | `<ip>` | derived | Explicit IP address for the daemon to bind to. |
 | `--port` | `<port>` | `8765` | TCP port for HTTP and WebSocket listeners. |
-| `--user` | `<user>` | `darjeeling` | System user to run the daemon (QA-34). |
-| `--tarball` | `<path>` | none | Install from a local pre-built release tarball. |
-| `--laptop` | none | auto | Enable battery charge threshold rules and power management. |
-| `--no-laptop` | none | auto | Disable laptop power profile checks. |
-| `--claude` | `<mode>` | `native` | Claude Code CLI installation mode: `native`, `apt`, or `skip`. |
+| `--user` | `<user>` | `darjeeling` | System user to run the daemon. |
+| `--tarball` | `<path>` | adjacent tarball | Install from a specific release tarball. |
+| `--version` | `<ver>` | stamped / `VERSION` file | Override the version (used for the release directory name). |
+| `--laptop` | none | off | Enable battery charge threshold rules and ignore the lid switch. |
+| `--no-laptop` | none | off | Disable the laptop profile. |
+| `--claude` | `<mode>` | `native` | Claude Code install mode: `native` (per-user install) or `skip`. |
 | `--with-agy` | none | disabled | Install Google Antigravity SDK CLI (experimental). |
-| `--vault-sync` | `<mode>` | `none` | Vault synchronization mode: `none` or `obsidian-sync` (OD-25, G-32). |
-| `--uninstall` | none | false | Uninstall service units and symlinks. |
-| `--purge` | none | false | Used with `--uninstall` to delete configuration and data directories. |
-| `--delete-vault` | none | false | Used with `--uninstall` to purge the vault workspace directory. |
+| `--vault-sync` | `<mode>` | `none` | Vault synchronization mode: `none` or `obsidian-sync`. |
+| `--install-nordvpn` | none | disabled | Install the NordVPN client. |
+| `--uninstall` | none | false | Uninstall services and installer-created files. |
+| `--purge` | none | false | Used with `--uninstall` to delete `/etc/darjeeling` and `/var/lib/darjeeling`. |
+| `--delete-vault` | none | false | Used with `--uninstall` to delete `/var/lib/darjeeling/vault`. |
 | `--remove-user` | none | false | Used with `--uninstall` to remove the service user account. |
 
 ---
 
-## 6. Upgrades, Rollbacks & Virtual Environment Repair
+## 6. Permission Ceiling
+
+`DARJEELING_PERMISSION_CEILING` in `/etc/darjeeling/darjeeling.env` is the highest permission mode a client may request. Requests above it are lowered to it.
+
+| Value | Meaning |
+|---|---|
+| `plan` | Read-only analysis; no file edits. |
+| `acceptEdits` | May edit files in the vault/workspace (default). |
+| `bypassPermissions` | Runs tools and shell commands without asking. |
+
+To raise it:
+
+```bash
+sudo darjeeling config set permission-ceiling bypassPermissions
+sudo systemctl restart darjeeling.service
+```
+
+Installs migrated by 1.0.3 or earlier from the legacy 4.1.0 layout were forced to `bypassPermissions`. 1.0.4 keeps an explicit value, so check yours with `sudo darjeeling config get permission-ceiling`.
+
+---
+
+## 7. Upgrades, Rollbacks & Virtual Environment Repair
 
 ### Upgrading the Server
-Upgrades verify release checksums against `SHA256SUMS` before touching the running service:
+Download the new release's tarball and `SHA256SUMS`, verify, then upgrade:
 
-<!-- not-run: operational upgrade command -->
 ```bash
-sudo darjeeling upgrade
+VER=1.0.4
+BASE="https://github.com/michaelperna/obsidian-darjeeling/releases/download/${VER}"
+curl -fsSL -O "${BASE}/darjeeling-server-${VER}.tar.gz" -O "${BASE}/SHA256SUMS"
+sha256sum --ignore-missing -c SHA256SUMS
+sudo darjeeling upgrade --tarball "darjeeling-server-${VER}.tar.gz"
 ```
-* The upgrade utility verifies that no agent turns are actively executing before proceeding (use `--force` to override).
-* A pre-upgrade health check probes the running instance; if the upgraded version fails health checks, it automatically rolls back to the previous release symlink.
+* The upgrade refuses to run while agent turns are executing (use `--force` to override).
+* After installing, it polls `/health`; if the new release does not come up, it switches `/opt/darjeeling/current` back to the previous release.
+* Roll back manually with `sudo darjeeling rollback`.
 
-### Rebuilding Virtual Environments After Distro Upgrades (G-46)
+### Rebuilding Virtual Environments After Distro Upgrades
 When upgrading your underlying Linux distribution (e.g., Debian 12 with Python 3.11 to Debian 13 with Python 3.13), existing virtual environments break because the underlying Python binary is replaced.
 
 Run `darjeeling doctor` to diagnose the condition:
-<!-- not-run: diagnostic command -->
 ```bash
 darjeeling doctor
 ```
 If Python version mismatch is detected, repair the virtual environment:
-<!-- not-run: repair command -->
 ```bash
 sudo darjeeling upgrade --rebuild-venv
 ```
 
 ---
 
-## 7. Automated Cloud-Init Deployment
+## 8. Automated Cloud-Init Deployment
 
 For headless virtual machines (AWS, GCP, Hetzner, Proxmox), deploy using `cloud-init`:
 
-<!-- not-run: cloud-init yaml configuration -->
 ```yaml
 #cloud-config
 package_update: true
 packages:
+  - ca-certificates
   - curl
   - python3
   - python3-venv
-  - git
 
 runcmd:
-  - git clone https://github.com/darjeeling-agent/darjeeling.git /tmp/darjeeling-repo
-  - bash /tmp/darjeeling-repo/server/install.sh --yes --network auto
-  - rm -rf /tmp/darjeeling-repo
+  - mkdir -p /root/darjeeling-install
+  - cd /root/darjeeling-install && curl -fsSL -O https://github.com/michaelperna/obsidian-darjeeling/releases/download/1.0.4/install.sh -O https://github.com/michaelperna/obsidian-darjeeling/releases/download/1.0.4/darjeeling-server-1.0.4.tar.gz -O https://github.com/michaelperna/obsidian-darjeeling/releases/download/1.0.4/SHA256SUMS
+  - cd /root/darjeeling-install && sha256sum --ignore-missing -c SHA256SUMS && bash install.sh --yes --network auto
 ```
 
 ---
 
-## 8. Service Management & Troubleshooting
+## 9. Service Management & Troubleshooting
 
 Inspect service logs via `journalctl`:
-<!-- not-run: diagnostic command -->
 ```bash
 journalctl -u darjeeling.service -n 50 --no-pager
 ```
 
 Restart or stop the service:
-<!-- not-run: operational command -->
 ```bash
 sudo systemctl restart darjeeling.service
 sudo systemctl stop darjeeling.service
 ```
 
-Uninstall Darjeeling completely:
-<!-- not-run: destructive uninstall command -->
+### Uninstalling
+
 ```bash
-sudo bash /opt/darjeeling/current/server/install.sh --uninstall --purge --remove-user
+sudo darjeeling uninstall --purge --remove-user
 ```
+
+This runs the installed copy of the installer, `/opt/darjeeling/current/install.sh --uninstall`, which you can also call directly:
+
+```bash
+sudo bash /opt/darjeeling/current/install.sh --uninstall --purge --remove-user
+```
+
+Uninstall stops and removes the systemd units, `/usr/local/bin/darjeeling`, `/opt/darjeeling/releases`, `/opt/darjeeling/current`, `/opt/darjeeling/backups`, the laptop-mode udev and logind files, and `/etc/claude-code/managed-settings.json`. Anything else under `/opt/darjeeling` is left in place. Without `--purge`, your configuration (`/etc/darjeeling`), state and vault (`/var/lib/darjeeling`) are kept.

@@ -208,7 +208,7 @@ Client                                      Server
 
 ---
 
-## 5. Ring Buffer & Memory Ceilings (ADR-11)
+## 5. Ring Buffer & Memory Ceilings
 
 * **Per-Turn Buffer**: Ring buffer bounded by either:
   * Maximum **10,000 events**, or

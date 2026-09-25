@@ -21,7 +21,6 @@ Darjeeling integrates your plans natively into Obsidian's knowledge graph:
 Clicking **Export to Note** creates a Markdown document in your configured plans folder (e.g. `Plans/My Initiative.md`):
 - Includes YAML frontmatter (`id`, `status`, `created`, `tags: [darjeeling-plan]`).
 - Checkboxes format as standard Markdown task lists compatible with the Dataview community plugin:
-<!-- not-run: note preview -->
 ```markdown
 ---
 id: plan-9402

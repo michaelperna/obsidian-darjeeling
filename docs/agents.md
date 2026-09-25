@@ -8,8 +8,8 @@ Project Darjeeling integrates external agentic coding CLIs and tools directly in
 
 | Agent CLI | Status | Tested Versions | Capabilities |
 |---|---|---|---|
-| **Claude Code (`claude`)** | **Supported** | `0.2.29` – `0.2.32` (G-47) | Multi-turn reasoning, file inspection, edits, shell command execution, Git integration. |
-| **Antigravity (`agy`)** | **Experimental** | Tested on v0.1.x | Task-based agent execution with specialized skill sets. Marked experimental (G-55). |
+| **Claude Code (`claude`)** | **Supported** | `0.2.29` – `0.2.32` | Multi-turn reasoning, file inspection, edits, shell command execution, Git integration. |
+| **Antigravity (`agy`)** | **Experimental** | Tested on v0.1.x | Task-based agent execution with specialized skill sets. Marked experimental. |
 | **DeepSeek CLI** | **Experimental** | Community builds | Reasoning and code generation CLI. Marked experimental. |
 
 ---
@@ -19,29 +19,26 @@ Project Darjeeling integrates external agentic coding CLIs and tools directly in
 To run Claude Code on your headless Linux companion server, authenticate as the server service user (`darjeeling` by default, or your configured service user):
 
 ### Method 1: Web Browser OAuth Flow
-Log in interactively as the service user (QA-34):
-<!-- not-run: operational command -->
+Log in interactively as the service user:
 ```bash
-sudo -u darjeeling -i claude login
+sudo runuser -u darjeeling -- claude login
 ```
 Claude Code prints an authorization URL. Open the URL on any browser, complete the Anthropic login, and paste the confirmation code back into the terminal.
 
 ### Method 2: Environment API Key
 Alternatively, supply an Anthropic API key in `/etc/darjeeling/darjeeling.env`:
-<!-- not-run: configuration example -->
 ```ini
 # /etc/darjeeling/darjeeling.env
 ANTHROPIC_API_KEY="sk-ant-api03-..."
 ```
 Then restart the service:
-<!-- not-run: operational command -->
 ```bash
 sudo systemctl restart darjeeling.service
 ```
 
 ---
 
-## 3. Permission Modes (OD-26)
+## 3. Permission Modes
 
 When starting a conversation or turn, you can select one of three permission modes:
 
@@ -59,7 +56,7 @@ When starting a conversation or turn, you can select one of three permission mod
 
 ## 4. The Server Permission Ceiling
 
-Even if a client requests `bypassPermissions`, the host companion server enforces a mandatory **permission ceiling** configured via `DARJEELING_DEFAULT_PERMISSION_CEILING` in `darjeeling.env`:
+Even if a client requests `bypassPermissions`, the host companion server enforces a mandatory **permission ceiling** configured via `DARJEELING_PERMISSION_CEILING` in `/etc/darjeeling/darjeeling.env` (default `acceptEdits`):
 
 | Server Ceiling Setting | Maximum Allowed Client Mode |
 |---|---|

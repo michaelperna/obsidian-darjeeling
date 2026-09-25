@@ -42,7 +42,6 @@ On supported hardware (such as ThinkPad via `thinkpad_acpi`), the dashboard prov
 ### B. The Unprivileged udev Rule
 Writing to sysfs charge thresholds normally requires root privileges. The Darjeeling installer installs a udev rule (`/etc/udev/rules.d/99-darjeeling-battery.rules`) so the unprivileged `darjeeling` service user can write threshold values directly:
 
-<!-- not-run: configuration example -->
 ```udev
 # /etc/udev/rules.d/99-darjeeling-battery.rules
 SUBSYSTEM=="power_supply", ATTR{charge_control_start_threshold}=="*", GROUP="darjeeling", MODE="0664"

@@ -4,7 +4,7 @@ When using the remote companion server, agents run directly against a working di
 
 ---
 
-## 1. The Core Rule: Exclude `.obsidian/` (G-30)
+## 1. The Core Rule: Exclude `.obsidian/`
 
 > [!CAUTION]
 > **You must strictly exclude the entire `.obsidian/` directory in both directions across all synchronization tools.**
@@ -22,7 +22,6 @@ Syncthing provides continuous, peer-to-peer encrypted synchronization across des
 
 Create a `.stignore` file in the root of your vault on every device:
 
-<!-- not-run: configuration example -->
 ```
 (?d).obsidian
 (?d).obsidian/**
@@ -35,7 +34,7 @@ Create a `.stignore` file in the root of your vault on every device:
 If you subscribe to official Obsidian Sync, you can run the headless Obsidian CLI sync client on your Linux server:
 
 > [!IMPORTANT]
-> **Run as a Separate Dedicated Sync User (OD-25)**:
+> **Run as a Separate Dedicated Sync User**:
 > Do not run Obsidian Headless under the `darjeeling` service account. Create a separate, isolated system user (e.g., `obssync`) with read/write access only to the vault folder.
 
 In your Obsidian Sync settings:
@@ -46,7 +45,6 @@ In your Obsidian Sync settings:
 For version-controlled vaults:
 1. Initialize a git repository in your vault.
 2. Add `.obsidian/` to `.gitignore`:
-<!-- not-run: configuration example -->
 ```gitignore
 # .gitignore
 .obsidian/
@@ -56,7 +54,7 @@ For version-controlled vaults:
 
 ---
 
-## 3. The `rsync` Warning: Never Use `--delete` (DOC-09)
+## 3. The `rsync` Warning: Never Use `--delete`
 
 > [!WARNING]
 > **Never use `rsync --delete` to sync your vault to the server.**
@@ -64,7 +62,6 @@ For version-controlled vaults:
 If an AI agent generates new notes, architectural plans, or project code on the server, running `rsync -av --delete ~/vault/ server:~/vault/` will treat those newly created files as "untracked extra files" and **permanently delete all agent outputs**.
 
 `rsync` should only be used as a one-time initial seed:
-<!-- not-run: one-time migration command -->
 ```bash
 # Safe: one-time initial copy without --delete
 rsync -avP --exclude='.obsidian' ~/MyVault/ darjeeling@server:~/vault/
@@ -72,7 +69,7 @@ rsync -avP --exclude='.obsidian' ~/MyVault/ darjeeling@server:~/vault/
 
 ---
 
-## 4. What a Phone-Only User Needs (G-53)
+## 4. What a Phone-Only User Needs
 
 If you use Obsidian exclusively on an iPhone, iPad, or Android phone without a personal computer:
 - **iOS / iPadOS**: Use official **Obsidian Sync** paired with an Obsidian Headless runner on your server (with `.obsidian/` excluded), or sync Markdown repositories via **Working Copy** (git).
