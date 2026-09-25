@@ -254,6 +254,33 @@ def _is_private_ip(ip_str: str) -> bool:
     return any(addr in net for net in _BIND_ALLOWED_NETS)
 
 
+def _is_wildcard_or_link_local(ip_str: str) -> bool:
+    try:
+        addr = ipaddress.ip_address(ip_str.strip().strip("[]"))
+    except ValueError:
+        return False
+    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
+        addr = addr.ipv4_mapped
+    return addr.is_unspecified or addr.is_link_local
+
+
+def _wildcard_bind_message(target_ip: str, source: str) -> str:
+    """Startup error for 0.0.0.0 / :: / link-local binds (allowed up to 1.0.3)."""
+    return (
+        f"Refusing to bind to '{target_ip}' (from {source} in /etc/darjeeling/darjeeling.env). "
+        "Since 1.0.4 the server no longer listens on every interface. "
+        f"Replace {source} with one of: "
+        "DARJEELING_BIND=interface:tailscale0 (Tailscale), "
+        "DARJEELING_BIND=interface:nordlynx (NordVPN Meshnet), "
+        "DARJEELING_BIND=address:<overlay or LAN IP> (for example address:100.64.0.5 or address:192.168.1.20), "
+        "or DARJEELING_BIND=loopback (local access, Tailscale Serve or SSH forwarding)"
+        + (". Remove DARJEELING_HOST" if source == "DARJEELING_HOST" else "")
+        + ". Then: sudo systemctl restart darjeeling.service. "
+        "Or re-run the 1.0.4 installer with --network <mode> or --bind <ip> to rewrite it. "
+        "DARJEELING_ALLOW_PUBLIC_BIND=1 overrides this check and exposes the server on every network."
+    )
+
+
 def _get_interface_ip(iface: str) -> Optional[str]:
     """Retrieve IPv4 address for interface name."""
     try:
@@ -348,6 +375,8 @@ def _resolve_bind(bind_spec: str, source: str = "DARJEELING_BIND", timeout: floa
 
     if not allowed:
         if not ALLOW_PUBLIC_BIND:
+            if _is_wildcard_or_link_local(target_ip):
+                raise RuntimeError(_wildcard_bind_message(target_ip, source))
             raise RuntimeError(
                 f"Refusing to bind to non-private address '{target_ip}' (from {source}) "
                 "without DARJEELING_ALLOW_PUBLIC_BIND=1. Allowed: loopback, RFC 1918, "

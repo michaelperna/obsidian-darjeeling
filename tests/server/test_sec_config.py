@@ -177,3 +177,22 @@ def test_udev_rules_use_run_on_sysfs_attributes():
     for attr in ("charge_control_end_threshold", "charge_control_start_threshold"):
         assert f'RUN+="/bin/chgrp darjeeling %S%p/{attr}"' in body
         assert f'RUN+="/bin/chmod g+w %S%p/{attr}"' in body
+
+
+@pytest.mark.parametrize("var", ["DARJEELING_BIND", "DARJEELING_HOST"])
+@pytest.mark.parametrize("value", ["0.0.0.0", "::", "[::]", "address:0.0.0.0", "169.254.3.3"])
+def test_wildcard_bind_error_says_what_to_set(var, value, monkeypatch):
+    # 1.0.3 hosts bound to 0.0.0.0; the startup error must name the fix.
+    monkeypatch.setattr(config, "ALLOW_PUBLIC_BIND", False)
+    monkeypatch.delenv("DARJEELING_BIND", raising=False)
+    monkeypatch.delenv("DARJEELING_HOST", raising=False)
+    monkeypatch.setenv(var, value)
+    with pytest.raises(RuntimeError) as exc:
+        config.default_bind(timeout=0)
+    msg = str(exc.value)
+    assert var in msg
+    assert "DARJEELING_BIND=interface:tailscale0" in msg
+    assert "DARJEELING_BIND=address:" in msg
+    assert "DARJEELING_BIND=loopback" in msg
+    assert "systemctl restart darjeeling.service" in msg
+    assert ("Remove DARJEELING_HOST" in msg) == (var == "DARJEELING_HOST")
