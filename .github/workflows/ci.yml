@@ -48,6 +48,10 @@ jobs:
         run: ./scripts/ci/scrub-guard.sh --self-test
 
       - name: Scrub guard tree scan
+        env:
+          # Private patterns (name=regex per line) live in a repository secret,
+          # never in the tree. Empty on forks, which then get built-in rules only.
+          SCRUB_GUARD_PATTERNS: ${{ secrets.SCRUB_GUARD_PATTERNS }}
         run: ./scripts/ci/scrub-guard.sh
 
       - name: Egress audit
