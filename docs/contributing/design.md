@@ -4,9 +4,9 @@ Named for the region, Darjeeling's design system draws from the terroir of a Him
 
 ---
 
-## 1. The ADR-20 Token Architecture
+## 1. Token Architecture
 
-Darjeeling adheres to **ADR-20**, providing a layered design token architecture:
+Darjeeling provides a layered design token architecture:
 
 1. **Semantic Layer (Default Root)**:
    - Defined on `.darjeeling-root`.
@@ -53,7 +53,7 @@ Darjeeling renders both graphical web views and an xterm-powered terminal pane. 
 
 ## 3. Vector Mark Architecture & Illustration Factories
 
-To comply with Obsidian plugin directory security rules (`OBS-06`, `DM-30`), all icons and illustrations use structured DOM element factories rather than raw string injection (`innerHTML`).
+To comply with Obsidian plugin directory security rules, all icons and illustrations use structured DOM element factories rather than raw string injection (`innerHTML`).
 
 ### A. Element Factories (`src/ui/illustrations.ts`)
 - `createChatEmptyState()`: Renders the tea-tasting bowl with steaming mist.
@@ -114,12 +114,12 @@ All status colors and text ramps are verified against the dataviz six-checks per
 ## 6. CSS Quality & CI Verification
 
 The CSS suite is verified in CI using `npm run lint:css` (`scripts/ci/css-lint.mjs`), which enforces:
-1. **0 `!important`** in `tokens.css` and `base.css` (`OBS-22`).
+1. **0 `!important`** in `tokens.css` and `base.css`.
 2. Allow-list compliance for remaining `!important` statements in sprint-owned files (`terminal.css` for xterm, `overrides.css` for Obsidian modal layout).
-3. **0 undefined `--dj-*` custom properties** across all stylesheet files (`VTH-38`).
-4. **0 missing `@keyframes`** for any referenced CSS animation (`DM-19`).
-5. **0 raw un-tokenized hex literals** outside `tokens.css` (`DM-03`).
-6. **0 legacy assets** (`data:image/png;base64`) across `src/` (`OBS-05`, `OBS-06`).
+3. **0 undefined `--dj-*` custom properties** across all stylesheet files.
+4. **0 missing `@keyframes`** for any referenced CSS animation.
+5. **0 raw un-tokenized hex literals** outside `tokens.css`.
+6. **0 legacy assets** (`data:image/png;base64`) across `src/`.
 7. Balanced syntax and valid brace trees in the compiled `styles.css`.
 
 ### Running Verification Locally

@@ -33,13 +33,12 @@ Tailscale provides seamless mesh connectivity with automated TLS certificate pro
 ### Setup Steps
 1. Install Tailscale on your server and client devices.
 2. On your Linux companion server, enable background TLS serving on port 8765:
-<!-- not-run: operational command -->
 ```bash
 tailscale serve --bg 8765
 ```
 3. Use the resulting HTTPS URL (e.g. `https://workstation.tailnet.ts.net`) in Darjeeling settings or pairing deep links. WebSockets automatically upgrade to `wss://`.
 
-### Machine Naming & Certificate Transparency (G-41)
+### Machine Naming & Certificate Transparency
 > [!IMPORTANT]
 > Use a **neutral machine name** for your server (e.g., `workstation`, `dev-node`, `srv-alpha`).
 > All TLS certificates issued for Tailscale MagicDNS domains (`*.ts.net`) are published to public Certificate Transparency logs. Do not include personal names, internal project code names, or private vault titles in your machine's hostname.
@@ -62,14 +61,14 @@ NordVPN Meshnet connects devices directly via encrypted WireGuard tunnels using 
 
 When connected to the same home or office Wi-Fi network, you can connect directly to your server's LAN IP address (e.g., `http://192.168.1.50:8765`).
 
-### The iOS Local Network Prompt (G-40)
+### The iOS Local Network Prompt
 When accessing a local LAN IP address on iOS or iPadOS, iOS prompts:
 `"Obsidian" would like to find and connect to devices on your local network.`
 You **must tap "Allow"**. If dismissed or denied, iOS blocks all network calls to LAN endpoints. You can verify or enable this at any time in iOS **Settings > Obsidian > Local Network**.
 
 ---
 
-## 5. Mobile & iOS Network Rules (ADR-16)
+## 5. Mobile & iOS Network Rules
 
 ### A. Apple App Transport Security (ATS) Rules
 Apple's ATS security policy enforces specific constraints on iOS:

@@ -10,7 +10,7 @@ Desktop Local Mode allows you to run CLI agents (`claude`, `agy`) and an embedde
 |---|---|---|
 | **macOS** | **Supported** | Tested on macOS 14 & 15 (Apple Silicon & Intel). |
 | **Linux Desktop** | **Supported** | Tested on modern Linux distributions (systemd, glibc). |
-| **Windows Desktop** | **Untested** | May work via WSL; marked untested in 1.0 (G-57). |
+| **Windows Desktop** | **Untested** | May work via WSL; marked untested in 1.0. |
 | **iOS / Android** | **Not Supported** | Mobile operating systems forbid spawning local subprocesses. Use Direct API mode or the Companion Server. |
 
 ---
@@ -32,7 +32,6 @@ To provide a fully-functional interactive terminal (with ANSI truecolor, raw cur
 
 - **Prerequisite**: `python3` must be installed and accessible on your system PATH.
 - Verify in your terminal:
-<!-- not-run: check command -->
 ```bash
 python3 --version
 ```
