@@ -188,5 +188,4 @@ Every outbound network call site is audited and accounted for. Outbound network 
 Project Darjeeling is built on open standards and open-source software:
 - [Obsidian](https://obsidian.md) by Dynalist Inc.
 - [xterm.js](https://github.com/xtermjs/xterm.js) by SourceLair and Christopher Jeffrey (MIT)
-- [qr-creator](https://github.com/nimiq/qr-creator) by Nimiq Foundation (MIT)
 - Model APIs provided by Anthropic, Google, DeepSeek, and Ollama.

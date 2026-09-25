@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("darjeeling")
 
-VERSION = "1.0.3"  # keep in sync with plugin/manifest.json (single source of truth)
+VERSION = "1.0.4"  # keep in sync with plugin/manifest.json (single source of truth)
 SERVER_DIR = Path(__file__).resolve().parent.parent
 
 # Ensure standard user binary directories are in PATH so daemon processes find claude, agy, etc.

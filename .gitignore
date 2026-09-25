@@ -56,3 +56,4 @@ _lab/
 
 # Private scrub-guard patterns (see scripts/ci/scrub-guard.sh)
 scripts/ci/scrub-guard.patterns.local
+.ruff_cache/
