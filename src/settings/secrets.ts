@@ -1,10 +1,23 @@
 import type { App } from "obsidian";
 import type { DarjeelingSettings } from "./schema";
 
+/**
+ * app.secretStorage (Obsidian 1.11.4+). Its methods are synchronous and it has
+ * no delete; older builds and test doubles may be async or add deleteSecret.
+ */
 export interface SecretStorageApi {
-  getSecret(key: string): Promise<string | null>;
-  setSecret(key: string, value: string): Promise<void>;
-  deleteSecret(key: string): Promise<void>;
+  getSecret(key: string): Promise<string | null> | string | null;
+  setSecret(key: string, value: string): Promise<void> | void;
+  deleteSecret?(key: string): Promise<void> | void;
+}
+
+/**
+ * app.secretStorage only accepts lowercase alphanumeric ids with dashes, so
+ * the ids kept in settings (dj_gemini, dj_host_<id>) are mapped onto that
+ * alphabet at the storage boundary.
+ */
+export function secretStorageKey(id: string): string {
+  return id.toLowerCase().replace(/[^a-z0-9-]/g, "-");
 }
 
 export interface AppWithSecrets {
@@ -31,9 +44,10 @@ export class SecretStorage {
   private cache = new Map<string, string>();
 
   constructor(private app: App) {
-    this.typedApp = app as unknown as AppWithSecrets;
+    this.typedApp = app;
   }
 
+  /** Random id. Only for secrets with no deterministic id (see providerSecretId / hostSecretId). */
   generateSecretId(prefix = "dj_sec"): string {
     const rand = Math.random().toString(36).slice(2, 10);
     const ts = Date.now().toString(36);
@@ -44,14 +58,16 @@ export class SecretStorage {
     if (!key) return null;
 
     if (this.memoryFallback.has(key)) {
-      return this.memoryFallback.get(key) ?? null;
+      return this.memoryFallback.get(key) || null;
     }
 
+    // An empty (or blank) value is how a removed secret looks when the
+    // backend has no delete: treat it as absent everywhere.
     try {
       const storage = this.typedApp.secretStorage;
       if (storage?.getSecret) {
-        const val = await storage.getSecret(key);
-        if (typeof val === "string" && val.length > 0) return val;
+        const val = await storage.getSecret(secretStorageKey(key));
+        if (typeof val === "string" && val.trim().length > 0) return val;
       }
     } catch {
       /* fallback to local storage */
@@ -60,7 +76,7 @@ export class SecretStorage {
     try {
       if (this.typedApp.loadLocalStorage) {
         const val = this.typedApp.loadLocalStorage(`dj_secret_${key}`);
-        if (typeof val === "string" && val.length > 0) return val;
+        if (typeof val === "string" && val.trim().length > 0) return val;
       }
     } catch {
       /* ignore */
@@ -69,7 +85,7 @@ export class SecretStorage {
     try {
       if (typeof window !== "undefined" && window.localStorage) {
         const val = window.localStorage.getItem(`dj_secret_${key}`);
-        if (typeof val === "string" && val.length > 0) return val;
+        if (typeof val === "string" && val.trim().length > 0) return val;
       }
     } catch {
       /* ignore */
@@ -80,6 +96,10 @@ export class SecretStorage {
 
   async setSecret(key: string, value: string): Promise<void> {
     if (!key) return;
+    if (!value.trim()) {
+      await this.deleteSecret(key);
+      return;
+    }
     this.memoryOnly.delete(key);
     this.memoryFallback.delete(key);
     let stored = false;
@@ -89,8 +109,9 @@ export class SecretStorage {
     try {
       const storage = this.typedApp.secretStorage;
       if (storage?.setSecret && storage?.getSecret) {
-        await storage.setSecret(key, value);
-        const check = await storage.getSecret(key);
+        const sKey = secretStorageKey(key);
+        await storage.setSecret(sKey, value);
+        const check = await storage.getSecret(sKey);
         if (check === value) {
           return;
         }
@@ -137,10 +158,17 @@ export class SecretStorage {
     this.memoryFallback.delete(key);
     this.memoryOnly.delete(key);
 
+    this.cache.delete(key);
+
     try {
       const storage = this.typedApp.secretStorage;
-      if (storage?.deleteSecret) {
-        await storage.deleteSecret(key);
+      const sKey = secretStorageKey(key);
+      if (typeof storage?.deleteSecret === "function") {
+        await storage.deleteSecret(sKey);
+      } else if (storage?.setSecret) {
+        // Obsidian's secretStorage has no delete: overwrite with an empty
+        // value, which getSecret treats as absent.
+        await storage.setSecret(sKey, "");
       }
     } catch {
       /* fallback */
@@ -168,9 +196,9 @@ export class SecretStorage {
    * Stores the secret value with a unique id, verifies read-back.
    * If keychain verification fails, preserves value in memory so the plugin never crashes.
    */
-  async storeSecretWithVerification(value: string, prefix = "dj_sec"): Promise<string> {
+  async storeSecretWithVerification(value: string, prefix = "dj_sec", id = ""): Promise<string> {
     if (!value) return "";
-    const id = this.generateSecretId(prefix);
+    if (!id) id = this.generateSecretId(prefix);
     await this.setSecret(id, value);
     const read = await this.getSecret(id);
     if (read !== value) {
@@ -188,7 +216,7 @@ export class SecretStorage {
 
   /** Synchronous view of a value this instance has already read or written. */
   peek(key: string): string {
-    return (key && this.cache.get(key)) || "";
+    return (key && this.cache.get(key)?.trim()) || "";
   }
 
   /** Read a secret and remember it for synchronous peek(). */
@@ -203,7 +231,7 @@ export class SecretStorage {
   /** Store (or, for an empty value, delete) a secret and update the cache. */
   async save(key: string, value: string): Promise<void> {
     if (!key) return;
-    if (!value) {
+    if (!value.trim()) {
       this.cache.delete(key);
       await this.deleteSecret(key);
       return;
@@ -215,7 +243,7 @@ export class SecretStorage {
   /** Update the synchronous cache immediately; persist in the background. */
   remember(key: string, value: string): void {
     if (!key) return;
-    if (value) this.cache.set(key, value);
+    if (value.trim()) this.cache.set(key, value);
     else this.cache.delete(key);
   }
 
@@ -256,6 +284,171 @@ export function providerSecretSlot(provider: string): ProviderSecretSlot | null 
   }
 }
 
+/**
+ * Deterministic secret ids. Every device derives the same id from synced
+ * settings, so a key entered on device B lands under the id device A already
+ * wrote into data.json (random ids made two devices diverge).
+ */
+const PROVIDER_SECRET_IDS: Record<ProviderSecretSlot, string> = {
+  gemini: "dj_gemini",
+  anthropic: "dj_anthropic",
+  deepseek: "dj_deepseek",
+  openaiCompatible: "dj_openai_compatible",
+};
+
+export function providerSecretId(slot: ProviderSecretSlot): string {
+  return PROVIDER_SECRET_IDS[slot];
+}
+
+export function hostSecretId(hostId: string): string {
+  return `dj_host_${hostId || "default"}`;
+}
+
+/**
+ * Host id to pair under. Re-pairing a host that synced settings already list
+ * (same base URL) reuses its id, so this device's token fills the secret id
+ * the other devices reference instead of adding a duplicate host.
+ */
+export function pairingHostId(
+  settings: DarjeelingSettings,
+  baseUrl: string,
+  fallback: string
+): string {
+  const norm = (u: string) => u.trim().replace(/\/+$/, "").toLowerCase();
+  const match = settings.hosts?.find((h) => h.baseUrl && norm(h.baseUrl) === norm(baseUrl));
+  return match?.id || fallback;
+}
+
+/**
+ * Point every configured secret reference at its deterministic id.
+ *
+ * - The deterministic id already holds a value on this device: use it.
+ * - Only the old (random) id holds one: copy it to the deterministic id and
+ *   switch once the copy is durable (copy -> verify -> switch).
+ * - Neither holds one: switch anyway, so a key entered later on this device
+ *   matches the id other devices use.
+ *
+ * An empty reference means "not configured" and is left alone. Returns true
+ * when settings changed and should be saved.
+ */
+export async function resolveSecretIds(
+  secrets: SecretStorage,
+  settings: DarjeelingSettings
+): Promise<boolean> {
+  let changed = false;
+  const resolve = async (current: string, target: string): Promise<string> => {
+    if (!current || current === target) return current;
+    if (await secrets.load(target)) return target;
+    const old = await secrets.load(current);
+    if (old) {
+      try {
+        await secrets.setSecret(target, old);
+      } catch {
+        return current;
+      }
+      if ((await secrets.getSecret(target)) !== old || !secrets.isDurable(target)) return current;
+      secrets.remember(target, old);
+    }
+    return target;
+  };
+
+  for (const slot of PROVIDER_SECRET_SLOTS) {
+    const cfg = settings.providers?.[slot];
+    if (!cfg?.apiKeySecretId) continue;
+    const next = await resolve(cfg.apiKeySecretId, providerSecretId(slot));
+    if (next !== cfg.apiKeySecretId) {
+      cfg.apiKeySecretId = next;
+      changed = true;
+    }
+  }
+  for (const h of [...(settings.hosts ?? []), ...(settings.remoteHosts ?? [])]) {
+    if (!h.tokenSecretId) continue;
+    const next = await resolve(h.tokenSecretId, hostSecretId(h.id));
+    if (next !== h.tokenSecretId) {
+      h.tokenSecretId = next;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+/** Shown when synced settings reference a secret this device does not hold. */
+export const MISSING_SECRET_MESSAGE =
+  "This device needs its own copy of the token/key. Re-pair this device or re-enter the key (secrets are no longer synced in data.json).";
+export const MISSING_HOST_TOKEN_MESSAGE =
+  "This device needs its own copy of the host token. Re-pair this device or paste the token again (secrets are no longer synced in data.json).";
+export const MISSING_API_KEY_MESSAGE =
+  "This device needs its own copy of this API key. Re-enter the key (secrets are no longer synced in data.json).";
+
+export interface MissingSecret {
+  kind: "host" | "provider";
+  /** Host id or provider slot. */
+  ref: string;
+  secretId: string;
+  label: string;
+}
+
+/**
+ * Hosts and providers that synced settings mark as configured (they carry a
+ * secret id) but whose secret is absent on this device. Uses the cache primed
+ * at load.
+ */
+export function findMissingSecrets(
+  secrets: SecretStorage | null | undefined,
+  settings: DarjeelingSettings
+): MissingSecret[] {
+  const out: MissingSecret[] = [];
+  const has = (id: string) => Boolean(secrets?.peek(id));
+  const seenHosts = new Set<string>();
+  for (const h of settings.hosts ?? []) {
+    seenHosts.add(h.id);
+    if (h.tokenSecretId && !has(h.tokenSecretId)) {
+      out.push({ kind: "host", ref: h.id, secretId: h.tokenSecretId, label: h.name || h.id });
+    }
+  }
+  for (const h of settings.remoteHosts ?? []) {
+    if (seenHosts.has(h.id)) continue;
+    if (h.tokenSecretId && !has(h.tokenSecretId)) {
+      out.push({ kind: "host", ref: h.id, secretId: h.tokenSecretId, label: h.name || h.id });
+    }
+  }
+  for (const slot of PROVIDER_SECRET_SLOTS) {
+    const id = settings.providers?.[slot]?.apiKeySecretId;
+    if (id && !has(id)) out.push({ kind: "provider", ref: slot, secretId: id, label: PROVIDER_LABELS[slot] });
+  }
+  return out;
+}
+
+const PROVIDER_LABELS: Record<ProviderSecretSlot, string> = {
+  gemini: "Gemini API key",
+  anthropic: "Anthropic API key",
+  deepseek: "DeepSeek API key",
+  openaiCompatible: "OpenAI-compatible API key",
+};
+
+/** The active host is configured with a token, but this device has none. */
+export function activeHostNeedsLocalToken(
+  secrets: SecretStorage | null | undefined,
+  settings: DarjeelingSettings
+): boolean {
+  const host =
+    settings.hosts?.find((h) => h.id === settings.activeHostId) ??
+    settings.remoteHosts?.find((h) => h.id === (settings.activeRemoteHostId || settings.activeHostId));
+  return Boolean(host?.tokenSecretId) && !secrets?.peek(host?.tokenSecretId ?? "");
+}
+
+/** The provider has a key configured (synced id) but none on this device. */
+export function providerNeedsLocalKey(
+  secrets: SecretStorage | null | undefined,
+  settings: DarjeelingSettings,
+  provider: string
+): boolean {
+  const slot = providerSecretSlot(provider);
+  if (!slot) return false;
+  const id = settings.providers?.[slot]?.apiKeySecretId;
+  return Boolean(id) && !secrets?.peek(id ?? "");
+}
+
 /** Secret id of the active host's token (hosts first, then legacy remoteHosts). */
 export function activeTokenSecretId(settings: DarjeelingSettings): string {
   const activeHost = settings.hosts?.find((h) => h.id === settings.activeHostId);
@@ -292,14 +485,17 @@ export async function writeProviderApiKey(
   const slot = providerSecretSlot(provider);
   if (!slot) return;
   const cfg = settings.providers[slot];
+  const id = providerSecretId(slot);
   const trimmed = value.trim();
   if (!trimmed) {
-    if (cfg.apiKeySecretId) await secrets.save(cfg.apiKeySecretId, "");
+    if (cfg.apiKeySecretId && cfg.apiKeySecretId !== id) await secrets.save(cfg.apiKeySecretId, "");
+    await secrets.save(id, "");
     cfg.apiKeySecretId = "";
     return;
   }
-  if (!cfg.apiKeySecretId) cfg.apiKeySecretId = secrets.generateSecretId(`dj_${slot}`);
-  await secrets.save(cfg.apiKeySecretId, trimmed);
+  // Always the deterministic id, so every device agrees on where the key lives.
+  cfg.apiKeySecretId = id;
+  await secrets.save(id, trimmed);
 }
 
 /** Synchronous "has key" check for UI state (cache primed at load). */
@@ -312,7 +508,8 @@ export function hasProviderApiKey(
   if (!slot) return false;
   const id = settings.providers?.[slot]?.apiKeySecretId;
   if (!id) return false;
-  return secrets ? Boolean(secrets.peek(id)) : true;
+  // Per device: a synced id without a local secret is "no key" here.
+  return Boolean(secrets?.peek(id));
 }
 
 /** Top-level legacy plaintext fields that must never reach data.json. */

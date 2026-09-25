@@ -11,7 +11,9 @@ import { DirectApiRunner } from "../../src/runtime/directApi";
 import {
   SecretStorage,
   hasProviderApiKey,
+  providerSecretId,
   readProviderApiKey,
+  secretStorageKey,
   serializeSettings,
   writeProviderApiKey,
 } from "../../src/settings/secrets";
@@ -203,14 +205,15 @@ test("settings UI helpers: write, has-key state, and removal go through secret s
   await writeProviderApiKey(secrets, settings, "anthropic", "  sk-ant-typed  ");
   assert.equal(hasProviderApiKey(secrets, settings, "anthropic"), true);
   assert.equal(settings.anthropicApiKey, "");
-  assert.equal(store.get(settings.providers.anthropic.apiKeySecretId), "sk-ant-typed");
+  assert.equal(settings.providers.anthropic.apiKeySecretId, providerSecretId("anthropic"));
+  assert.equal(store.get(secretStorageKey(settings.providers.anthropic.apiKeySecretId)), "sk-ant-typed");
   assertNoSecret(JSON.stringify(serializeSettings(settings)), ["sk-ant-typed"], "serialized");
 
   const id = settings.providers.anthropic.apiKeySecretId;
   await writeProviderApiKey(secrets, settings, "anthropic", "");
   assert.equal(hasProviderApiKey(secrets, settings, "anthropic"), false);
   assert.equal(settings.providers.anthropic.apiKeySecretId, "");
-  assert.equal(store.has(id), false);
+  assert.equal(store.has(secretStorageKey(id)), false);
 });
 
 test("memory-only retained DeepSeek key maps back to DeepSeek on the next load", async () => {

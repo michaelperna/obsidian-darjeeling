@@ -1,5 +1,11 @@
 import { Notice, Platform, setIcon } from "obsidian";
-import { hasProviderApiKey } from "../../settings/secrets";
+import {
+  MISSING_API_KEY_MESSAGE,
+  MISSING_HOST_TOKEN_MESSAGE,
+  activeHostNeedsLocalToken,
+  hasProviderApiKey,
+  providerNeedsLocalKey,
+} from "../../settings/secrets";
 import type { DarjeelingChat } from "./chatView";
 import { setDeviceRuntime } from "../../runtime/router";
 
@@ -37,6 +43,10 @@ export function showRemoteOfflineCard(chat: DarjeelingChat, originalText: string
       ? "The remote Darjeeling daemon is offline or not responding. Check that the server daemon is running and reachable on the network."
       : "No remote server address has been configured. Configure a remote host in Settings to connect.",
   });
+  // Synced settings name a host token this device never received.
+  if (isConfigured && activeHostNeedsLocalToken(plugin.secretStorage, plugin.settings)) {
+    body.createEl("p", { cls: "dj-danger-note dj-offline-missing-secret", text: MISSING_HOST_TOKEN_MESSAGE });
+  }
 
   const actions = wrap.createDiv({ cls: "dj-offline-actions" });
 
@@ -82,7 +92,11 @@ export function showRemoteOfflineCard(chat: DarjeelingChat, originalText: string
   directBtn.addEventListener("click", () => {
     void (async () => {
       if (!hasDirectApiKey) {
-        new Notice("Direct API is not configured. Please add an API key in settings.");
+        new Notice(
+          providerNeedsLocalKey(plugin.secretStorage, plugin.settings, activeProv)
+            ? MISSING_API_KEY_MESSAGE
+            : "Direct API is not configured. Please add an API key in settings."
+        );
         const appWithSetting = plugin.app as unknown as AppWithSetting;
         appWithSetting.setting?.open?.();
         appWithSetting.setting?.openTabById?.(plugin.manifest.id);

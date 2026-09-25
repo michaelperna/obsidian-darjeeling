@@ -1,7 +1,13 @@
 import { Setting } from "obsidian";
 import type { DarjeelingSettingTab } from "../tab";
 import type { DirectApiProvider } from "../schema";
-import { hasProviderApiKey, writeProviderApiKey } from "../secrets";
+import {
+  MISSING_API_KEY_MESSAGE,
+  hasProviderApiKey,
+  providerNeedsLocalKey,
+  writeProviderApiKey,
+} from "../secrets";
+import { deferredCommit } from "../deferredCommit";
 
 /**
  * API key field backed by secret storage (ADR-05). The key is never shown or
@@ -22,28 +28,38 @@ function addApiKeyField(
     setting.setDesc(
       saved()
         ? `${desc} A key is saved in secret storage on this device. Type a new one to replace it.`
+        : providerNeedsLocalKey(plugin.secretStorage, plugin.settings, provider)
+        ? `${desc} ${MISSING_API_KEY_MESSAGE}`
         : `${desc} Stored in secret storage on this device, never in data.json.`
     );
   };
   describe();
+  // Store once the key is complete, not a partial key per keystroke.
+  const keyCommit = deferredCommit(async (val) => {
+    await writeProviderApiKey(plugin.secretStorage, plugin.settings, provider, val);
+    await plugin.saveSettings();
+    describe();
+  });
   setting.addText((text) => {
     text
       .setPlaceholder(saved() ? "Saved (hidden)" : placeholder)
       .setValue("")
-      .onChange(async (val) => {
-        if (!val.trim()) return; // removing a key is explicit (button below)
-        await writeProviderApiKey(plugin.secretStorage, plugin.settings, provider, val);
-        await plugin.saveSettings();
-        describe();
+      .onChange((val) => {
+        // Removing a key is explicit (button below).
+        if (val.trim()) keyCommit.input(val);
+        else keyCommit.cancel();
       });
     text.inputEl.type = "password";
     text.inputEl.autocomplete = "off";
+    text.inputEl.addEventListener("change", () => keyCommit.flush());
+    text.inputEl.addEventListener("blur", () => keyCommit.flush());
   });
   setting.addExtraButton((btn) =>
     btn
       .setIcon("trash")
       .setTooltip("Remove saved key")
       .onClick(async () => {
+        keyCommit.cancel();
         await writeProviderApiKey(plugin.secretStorage, plugin.settings, provider, "");
         await plugin.saveSettings();
         tab.display();

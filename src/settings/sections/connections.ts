@@ -1,6 +1,8 @@
 import { Setting } from "obsidian";
 import type { DarjeelingSettingTab } from "../tab";
 import { isPrivateOrLoopbackHost } from "../../net/url";
+import { MISSING_HOST_TOKEN_MESSAGE, activeHostNeedsLocalToken } from "../secrets";
+import { deferredCommit } from "../deferredCommit";
 
 export function displayRemoteHostSettings(
   tab: DarjeelingSettingTab,
@@ -54,6 +56,13 @@ export function displayRemoteHostSettings(
     );
 
   const hasToken = Boolean(plugin.agentClient?.getAuthToken());
+  const needsOwnCopy = activeHostNeedsLocalToken(plugin.secretStorage, plugin.settings);
+  // Save + reconnect once the token is complete (change / blur, or 600 ms of
+  // quiet), never on every keystroke with a partial token.
+  const tokenCommit = deferredCommit(async (token) => {
+    // Secret storage only (ADR-05); settings never hold the token.
+    await plugin.agentClient?.setAuthToken(token);
+  });
   const tokenSetting = new Setting(containerEl)
     .setName("Auth token")
     .setDesc(
@@ -63,18 +72,24 @@ export function displayRemoteHostSettings(
       text
         .setPlaceholder(hasToken ? "Saved (hidden)" : "paste the host token")
         .setValue("")
-        .onChange(async (value) => {
+        .onChange((value) => {
           const token = value.trim();
-          if (!token) return;
-          // Secret storage only (ADR-05); settings never hold the token.
-          await plugin.agentClient?.setAuthToken(token);
+          if (token) tokenCommit.input(token);
+          else tokenCommit.cancel();
         });
       text.inputEl.type = "password";
       text.inputEl.autocomplete = "off";
       text.inputEl.addClass("dj-input-token");
+      text.inputEl.addEventListener("change", () => tokenCommit.flush());
+      text.inputEl.addEventListener("blur", () => tokenCommit.flush());
     });
 
-  if (!hasToken) {
+  if (needsOwnCopy) {
+    tokenSetting.descEl.createDiv({
+      cls: "dj-danger-note",
+      text: MISSING_HOST_TOKEN_MESSAGE,
+    });
+  } else if (!hasToken) {
     tokenSetting.descEl.createDiv({
       cls: "dj-danger-note",
       text:
