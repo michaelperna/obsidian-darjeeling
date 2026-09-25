@@ -7,7 +7,14 @@ import {
   type RemoteHostConfig,
   type TerminalProfile,
 } from "./schema";
-import type { SecretStorage } from "./secrets";
+import {
+  PLAINTEXT_SECRET_FIELDS,
+  activeTokenSecretId,
+  providerSecretSlot,
+  type ProviderSecretSlot,
+  type RetainedPlaintext,
+  type SecretStorage,
+} from "./secrets";
 import { loadDeviceSettings, saveDeviceSettings } from "./device";
 
 export const CURRENT_SETTINGS_VERSION = 1;
@@ -23,11 +30,146 @@ export interface MigrationResult {
  * Migrates v0 or partial settings to v1 per ADR-04 / ADR-05.
  * Enforces the 5 sync safety rules.
  */
+/**
+ * Store `value` under `id` (or a fresh id) and read it back.
+ * Returns the id and whether the value is durably stored. A value that only
+ * made it into the in-memory fallback is NOT durable: the caller must keep
+ * its plaintext source (copy -> verify -> delete, Sync Rule 3).
+ */
+async function storeVerified(
+  secrets: SecretStorage,
+  id: string,
+  value: string,
+  prefix: string
+): Promise<{ id: string; durable: boolean }> {
+  let secretId = id;
+  let verified = false;
+  if (secretId) {
+    try {
+      await secrets.setSecret(secretId, value);
+      verified = (await secrets.getSecret(secretId)) === value;
+    } catch {
+      verified = false;
+    }
+  } else {
+    secretId = await secrets.storeSecretWithVerification(value, prefix);
+    verified = (await secrets.getSecret(secretId)) === value;
+  }
+  secrets.remember(secretId, value);
+  return { id: secretId, durable: verified && secrets.isDurable(secretId) };
+}
+
+const SLOT_PREFIX: Record<ProviderSecretSlot, string> = {
+  gemini: "dj_gemini",
+  anthropic: "dj_anthropic",
+  deepseek: "dj_deepseek",
+  openaiCompatible: "dj_openai",
+};
+
+const SLOT_FIELD: Record<ProviderSecretSlot, (typeof PLAINTEXT_SECRET_FIELDS)[number]> = {
+  gemini: "geminiApiKey",
+  anthropic: "anthropicApiKey",
+  deepseek: "deepseekApiKey",
+  openaiCompatible: "openaiApiKey",
+};
+
+/** Move plaintext provider keys from `stored` into secret storage. */
+async function moveProviderKeys(
+  stored: Record<string, unknown>,
+  target: DarjeelingSettings,
+  secrets: SecretStorage,
+  retained: RetainedPlaintext | undefined,
+  isV0: boolean
+): Promise<void> {
+  const str = (k: string): string => {
+    const v = stored[k];
+    return typeof v === "string" ? v.trim() : "";
+  };
+  const provider = str("directApiProvider") || target.directApiProvider;
+  const deepseekApiKey = str("deepseekApiKey");
+  const plan: Array<[(typeof PLAINTEXT_SECRET_FIELDS)[number], ProviderSecretSlot]> = [
+    ["geminiApiKey", "gemini"],
+    ["anthropicApiKey", "anthropic"],
+    ["deepseekApiKey", "deepseek"],
+    [
+      "openaiApiKey",
+      // v0 kept the DeepSeek key in openaiApiKey (the provider was OpenAI-shaped)
+      isV0 && provider === "deepseek" && !deepseekApiKey ? "deepseek" : "openaiCompatible",
+    ],
+  ];
+  const directSlot = providerSecretSlot(provider);
+  if (directSlot && !plan.some(([f, slot]) => slot === directSlot && str(f))) {
+    plan.push(["directApiKey", directSlot]);
+  }
+
+  for (const [field, slot] of plan) {
+    const value = str(field);
+    if (!value) continue;
+    const cfg = target.providers[slot];
+    const res = await storeVerified(secrets, cfg.apiKeySecretId, value, SLOT_PREFIX[slot]);
+    cfg.apiKeySecretId = res.id;
+    // Retain under the slot's own field so a later (v1) load maps it back
+    // to the same provider.
+    if (!res.durable && retained) retained.top[SLOT_FIELD[slot]] = value;
+  }
+}
+
+/** Blank every plaintext secret field on the in-memory settings object. */
+function blankPlaintextSecrets(target: DarjeelingSettings): void {
+  for (const f of PLAINTEXT_SECRET_FIELDS) {
+    (target as unknown as Record<string, unknown>)[f] = "";
+  }
+  for (const h of target.hosts ?? []) delete h.authToken;
+  for (const h of target.remoteHosts ?? []) delete h.authToken;
+}
+
+/** v1 data written by <= 1.0.3 can still carry plaintext keys and tokens. */
+async function moveV1Secrets(
+  stored: Record<string, unknown>,
+  target: DarjeelingSettings,
+  secrets: SecretStorage,
+  retained: RetainedPlaintext | undefined
+): Promise<void> {
+  await moveProviderKeys(stored, target, secrets, retained, false);
+
+  for (const [list, prefix, bucket] of [
+    [target.hosts ?? [], "dj_host", retained?.hosts],
+    [target.remoteHosts ?? [], "dj_token", retained?.remoteHosts],
+  ] as const) {
+    for (const h of list as Array<HostConfig | RemoteHostConfig>) {
+      const tok = typeof h.authToken === "string" ? h.authToken.trim() : "";
+      if (!tok) continue;
+      const res = await storeVerified(secrets, h.tokenSecretId || "", tok, prefix);
+      h.tokenSecretId = res.id;
+      if (!res.durable && bucket) bucket[h.id] = tok;
+    }
+  }
+
+  const topToken =
+    (typeof stored.authToken === "string" && stored.authToken.trim()) ||
+    (typeof stored.token === "string" && stored.token.trim()) ||
+    "";
+  if (topToken) {
+    const activeHost = target.hosts?.find((h) => h.id === target.activeHostId);
+    const res = await storeVerified(
+      secrets,
+      activeHost?.tokenSecretId || activeTokenSecretId(target),
+      topToken,
+      "dj_token"
+    );
+    if (activeHost && !activeHost.tokenSecretId) activeHost.tokenSecretId = res.id;
+    if (!res.durable && retained) retained.top.authToken = topToken;
+  }
+
+  blankPlaintextSecrets(target);
+}
+
 export async function migrateSettings(
   stored: Record<string, unknown>,
   secrets?: SecretStorage,
   app?: App,
-  existingSettings?: DarjeelingSettings
+  existingSettings?: DarjeelingSettings,
+  retained?: RetainedPlaintext
 ): Promise<DarjeelingSettings> {
   // Sync Rule 1: Newer settings version than this client understands
   if (
@@ -43,7 +185,9 @@ export async function migrateSettings(
 
   // If already v1 and not re-migrating a v0 format
   if (stored.settingsVersion === CURRENT_SETTINGS_VERSION && stored.hosts) {
-    return validateSettings(stored);
+    const validated = validateSettings(structuredClone(stored));
+    if (secrets) await moveV1Secrets(stored, validated, secrets, retained);
+    return validated;
   }
 
   // v0 -> v1 Migration
@@ -72,51 +216,16 @@ export async function migrateSettings(
   // 1. Move secrets with Copy -> Verify -> Delete (Sync Rule 3)
   let tokenSecretId = base.hosts[0]?.tokenSecretId || "";
   if (rawAuthToken && secrets) {
-    tokenSecretId = await secrets.storeSecretWithVerification(
-      rawAuthToken,
-      "dj_token"
-    );
+    const res = await storeVerified(secrets, "", rawAuthToken, "dj_token");
+    tokenSecretId = res.id;
+    if (!res.durable && retained) retained.top.authToken = rawAuthToken;
   }
 
-  // Gemini API Key
-  const geminiApiKey = (stored.geminiApiKey as string) || "";
-  if (geminiApiKey && secrets) {
-    const keyId = await secrets.storeSecretWithVerification(
-      geminiApiKey,
-      "dj_gemini"
-    );
-    base.providers.gemini.apiKeySecretId = keyId;
+  if (secrets) {
+    await moveProviderKeys(stored, base, secrets, retained, true);
   }
 
-  // Anthropic API Key
-  const anthropicApiKey = (stored.anthropicApiKey as string) || "";
-  if (anthropicApiKey && secrets) {
-    const keyId = await secrets.storeSecretWithVerification(
-      anthropicApiKey,
-      "dj_anthropic"
-    );
-    base.providers.anthropic.apiKeySecretId = keyId;
-  }
-
-  // OpenAI / DeepSeek Key splitting
-  const openaiApiKey = (stored.openaiApiKey as string) || "";
   const directApiProvider = (stored.directApiProvider as string) || base.activeProvider;
-  if (openaiApiKey && secrets) {
-    if (directApiProvider === "deepseek") {
-      const keyId = await secrets.storeSecretWithVerification(
-        openaiApiKey,
-        "dj_deepseek"
-      );
-      base.providers.deepseek.apiKeySecretId = keyId;
-    } else {
-      const keyId = await secrets.storeSecretWithVerification(
-        openaiApiKey,
-        "dj_openai"
-      );
-      base.providers.openaiCompatible.apiKeySecretId = keyId;
-    }
-  }
-
   if (typeof stored.openaiBaseUrl === "string") {
     const url = stored.openaiBaseUrl;
     if (directApiProvider === "deepseek") {
@@ -162,10 +271,9 @@ export async function migrateSettings(
     for (const rh of stored.remoteHosts as RemoteHostConfig[]) {
       let rhTokenId = rh.tokenSecretId || "";
       if (rh.authToken && secrets) {
-        rhTokenId = await secrets.storeSecretWithVerification(
-          rh.authToken,
-          "dj_token"
-        );
+        const res = await storeVerified(secrets, rhTokenId, rh.authToken, "dj_token");
+        rhTokenId = res.id;
+        if (!res.durable && retained) retained.remoteHosts[rh.id || "remote-host"] = rh.authToken;
       }
       cleanedRemoteHosts.push({
         id: rh.id || "remote-host",
@@ -260,6 +368,14 @@ export async function migrateSettings(
     base.hasCompletedOnboarding = stored.onboardingDone;
   }
   if (
+    typeof stored.directApiProvider === "string" &&
+    ["gemini", "anthropic", "openai-compatible", "openaiCompatible", "deepseek", "ollama"].includes(
+      stored.directApiProvider
+    )
+  ) {
+    base.directApiProvider = stored.directApiProvider as DarjeelingSettings["directApiProvider"];
+  }
+  if (
     typeof stored.runtimeMode === "string" &&
     (stored.runtimeMode === "remote" ||
       stored.runtimeMode === "direct-api" ||
@@ -272,11 +388,12 @@ export async function migrateSettings(
     }
   }
 
-  // 5. Delete plaintext secrets from data.json (ADR-05)
-  base.authToken = "";
-  base.geminiApiKey = "";
-  base.anthropicApiKey = "";
-  base.openaiApiKey = "";
+  // 5. Delete plaintext secrets from the settings object (ADR-05). Values
+  // that could not be stored durably survive in `retained`, which
+  // saveSettings writes back until a later load can move them.
+  if (secrets) {
+    blankPlaintextSecrets(base);
+  }
   base.meshnetHost = meshnetHost;
   base.port = port;
   base.remoteCwd = remoteCwd;

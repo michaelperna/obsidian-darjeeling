@@ -68,7 +68,7 @@ function getRequire(): ((id: string) => unknown) | null {
 }
 
 export function getNodeProcess(): NodeProcess | undefined {
-  if (!Platform.isDesktopApp && !Platform.isDesktop) return undefined;
+  if (!Platform.isDesktopApp) return undefined;
   const req = getRequire();
   if (req) {
     try {
@@ -78,8 +78,9 @@ export function getNodeProcess(): NodeProcess | undefined {
       /* ignore */
     }
   }
-  if (typeof process !== "undefined" && process?.env) {
-    return process;
+  const globalProcess = (globalThis as { process?: NodeProcess }).process;
+  if (globalProcess?.env) {
+    return globalProcess;
   }
   if (typeof window !== "undefined") {
     const win = window as unknown as { process?: NodeProcess };
@@ -89,7 +90,7 @@ export function getNodeProcess(): NodeProcess | undefined {
 }
 
 export function getUserHome(): string {
-  if (!Platform.isDesktopApp && !Platform.isDesktop) return "";
+  if (!Platform.isDesktopApp) return "";
   const req = getRequire();
   if (req) {
     try {
@@ -107,7 +108,7 @@ export function getUserHome(): string {
 }
 
 export function getNodeChildProcess(): NodeChildProcessModule | null {
-  if (!Platform.isDesktopApp && !Platform.isDesktop) return null;
+  if (!Platform.isDesktopApp) return null;
   const req = getRequire();
   if (req) {
     try {
@@ -120,7 +121,7 @@ export function getNodeChildProcess(): NodeChildProcessModule | null {
 }
 
 export function getNodeFs(): NodeFsModule | null {
-  if (!Platform.isDesktopApp && !Platform.isDesktop) return null;
+  if (!Platform.isDesktopApp) return null;
   const req = getRequire();
   if (req) {
     try {
@@ -133,7 +134,7 @@ export function getNodeFs(): NodeFsModule | null {
 }
 
 export function getNodePath(): NodePathModule | null {
-  if (!Platform.isDesktopApp && !Platform.isDesktop) return null;
+  if (!Platform.isDesktopApp) return null;
   const req = getRequire();
   if (req) {
     try {
@@ -337,7 +338,7 @@ export async function checkPython3Available(): Promise<{ ok: boolean; path?: str
  * Safely checks if a file is executable.
  */
 export function isExecutable(filePath: string): boolean {
-  if (!Platform.isDesktopApp && !Platform.isDesktop) return false;
+  if (!Platform.isDesktopApp) return false;
   try {
     const fs = getNodeFs();
     if (!fs) return false;
@@ -353,7 +354,7 @@ export function isExecutable(filePath: string): boolean {
  * Resolves a default executable shell on Desktop.
  */
 export function resolveShell(preferredShell?: string): string {
-  if (!Platform.isDesktopApp && !Platform.isDesktop) return "sh";
+  if (!Platform.isDesktopApp) return "sh";
   if (preferredShell && isExecutable(preferredShell)) return preferredShell;
   if (isExecutable("/bin/zsh")) return "/bin/zsh";
   if (isExecutable("/bin/bash")) return "/bin/bash";

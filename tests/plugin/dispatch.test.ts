@@ -48,12 +48,14 @@ test("AgentClient.sendTurn clamps bypassPermissions to plan if unconfirmed", asy
     client.connect();
     ws.last!.serverOpen();
 
-    const convId = "conv-bypass-test";
+    // Confirmation is keyed to the client-side conversation id, which exists
+    // from chat start (no agent session id yet).
+    const convId = client.getConversationKey();
+    assert.ok(convId);
     const options = {
       agent: "claude",
       prompt: "Execute bash command",
       permission_mode: "bypassPermissions" as const,
-      resume: convId,
     };
 
     // 1. Unconfirmed -> must be clamped to plan
@@ -77,7 +79,6 @@ test("AgentClient.sendTurn clamps bypassPermissions to plan if unconfirmed", asy
       agent: "agy",
       prompt: "Agy turn",
       permission_mode: "bypassPermissions" as const,
-      resume: convId,
     };
     await client.sendTurn(agyOptions);
     const sentFrames3 = ws.last!.sentJson();

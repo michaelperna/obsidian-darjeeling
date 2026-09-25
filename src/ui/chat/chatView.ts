@@ -55,7 +55,6 @@ export class DarjeelingChat extends Component {
   private lastReportedError: string | null = null;
 
   private isTurnActive = false;
-  private modeOverride: string | null = null;
   private vaultHarness: VaultHarness;
   private dispatcher: TurnDispatcher;
   private activeTurnId: string | null = null;
@@ -125,14 +124,6 @@ export class DarjeelingChat extends Component {
 
   getAttachChecked(): boolean {
     return !!this.attachEl?.checked;
-  }
-
-  getModeOverride(): string | null {
-    return this.modeOverride;
-  }
-
-  setModeOverride(mode: string | null): void {
-    this.modeOverride = mode;
   }
 
   isBusy(): boolean {
@@ -271,8 +262,13 @@ export class DarjeelingChat extends Component {
     this.inputEl?.focus();
   }
 
-  getActiveConversationId(): string | null {
-    return this.plugin.settings.lastAgentSessionId || null;
+  /**
+   * Client-side conversation id, minted when the chat starts (and on every
+   * new conversation). Bypass confirmation is keyed to it, so it exists
+   * before the agent has returned any session id.
+   */
+  getActiveConversationId(): string {
+    return this.client.getConversationKey();
   }
 
   public armTurnWatchdog(timeoutMs = 90000): void {

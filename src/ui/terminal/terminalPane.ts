@@ -538,7 +538,8 @@ export class TerminalPane {
     }
 
     // Remote profile (WebSocket)
-    const { meshnetHost, port, authToken } = settings;
+    const { meshnetHost, port } = settings;
+    const authToken = this.plugin.agentClient?.getAuthToken?.() ?? "";
     // One source of truth for remote session (VTH-03):
     const sessionName =
       settings.sessionName?.trim() || profile.sessionName?.trim() || "darjeeling";

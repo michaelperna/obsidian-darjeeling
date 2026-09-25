@@ -67,14 +67,10 @@ export class DarjeelingOnboardingView {
     if (hosts.length === 0) return false;
     const activeHost = hosts.find((h) => h.id === this.plugin.settings.activeHostId) || hosts[0];
     if (!activeHost) return false;
-    if (!activeHost.tokenSecretId && !this.plugin.settings.authToken) return true;
-    if (activeHost.tokenSecretId) {
-      const appWithSecrets = this.plugin.app as unknown as { loadLocalStorage?(k: string): string | null };
-      if (appWithSecrets.loadLocalStorage) {
-        const val = appWithSecrets.loadLocalStorage(`dj_secret_${activeHost.tokenSecretId}`);
-        if (!val) return true;
-      }
-    }
+    if (!activeHost.tokenSecretId) return !this.plugin.agentClient?.getAuthToken();
+    // Secret storage cache is primed at load; a synced host without a local
+    // secret needs pairing on this device.
+    if (!this.plugin.secretStorage?.peek(activeHost.tokenSecretId)) return true;
     return false;
   }
 
@@ -463,7 +459,7 @@ export class DarjeelingOnboardingView {
               token = (await this.plugin.secretStorage.getSecret(host.tokenSecretId)) || "";
             }
             if (!token) {
-              token = this.plugin.settings.authToken || "";
+              token = this.plugin.agentClient?.getAuthToken() ?? "";
             }
             if (!host || !token) {
               throw new Error("No active host token found. Please ensure a companion host is configured.");

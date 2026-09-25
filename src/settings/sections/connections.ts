@@ -53,6 +53,7 @@ export function displayRemoteHostSettings(
         })
     );
 
+  const hasToken = Boolean(plugin.agentClient?.getAuthToken());
   const tokenSetting = new Setting(containerEl)
     .setName("Auth token")
     .setDesc(
@@ -60,18 +61,20 @@ export function displayRemoteHostSettings(
     )
     .addText((text) => {
       text
-        .setPlaceholder("paste the host token")
-        .setValue(plugin.settings.authToken)
+        .setPlaceholder(hasToken ? "Saved (hidden)" : "paste the host token")
+        .setValue("")
         .onChange(async (value) => {
-          plugin.settings.authToken = value.trim();
-          await plugin.saveSettings();
+          const token = value.trim();
+          if (!token) return;
+          // Secret storage only (ADR-05); settings never hold the token.
+          await plugin.agentClient?.setAuthToken(token);
         });
       text.inputEl.type = "password";
       text.inputEl.autocomplete = "off";
       text.inputEl.addClass("dj-input-token");
     });
 
-  if (!plugin.settings.authToken) {
+  if (!hasToken) {
     tokenSetting.descEl.createDiv({
       cls: "dj-danger-note",
       text:

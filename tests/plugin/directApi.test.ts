@@ -2,17 +2,25 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { setRequestUrlHandler } from "./stubs/obsidian";
 import { DirectApiRunner } from "../../src/runtime/directApi";
-import { DEFAULT_SETTINGS, type DarjeelingSettings } from "../../src/settings/schema";
+import { createDefaultSettings, type DarjeelingSettings } from "../../src/settings/schema";
+import { secretsWithKeys } from "./helpers/secrets";
 import type { AgentEvent, StreamResult } from "../../src/net/agentClient";
 
 function createTestSettings(overrides: Partial<DarjeelingSettings> = {}): DarjeelingSettings {
   return {
-    ...DEFAULT_SETTINGS,
+    ...createDefaultSettings(),
     runtimeMode: "direct-api",
     directApiProvider: "gemini",
-    geminiApiKey: "test-gemini-key",
     ...overrides,
   };
+}
+
+/** Runner whose keys live in secret storage, as in the shipped plugin. */
+async function createRunner(
+  settings: DarjeelingSettings = createTestSettings(),
+  keys: Record<string, string> = { gemini: "test-gemini-key" }
+): Promise<DirectApiRunner> {
+  return new DirectApiRunner(settings, await secretsWithKeys(settings, keys));
 }
 
 test("DirectApiRunner: rejects concurrent turns", async () => {
@@ -36,7 +44,7 @@ test("DirectApiRunner: rejects concurrent turns", async () => {
     };
   });
 
-  const runner = new DirectApiRunner(createTestSettings());
+  const runner = await createRunner();
   let errorMessage = "";
   runner.setHandlers({
     onError: (msg) => {
@@ -80,7 +88,7 @@ test("DirectApiRunner: late replies are discarded when interrupted (PD-12)", asy
     };
   });
 
-  const runner = new DirectApiRunner(createTestSettings());
+  const runner = await createRunner();
   let receivedText = "";
   let receivedResult = false;
   let statusState = "";
@@ -141,7 +149,7 @@ test("DirectApiRunner: history is committed only after successful non-empty repl
     };
   });
 
-  const runner = new DirectApiRunner(createTestSettings());
+  const runner = await createRunner();
   let lastError = "";
   runner.setHandlers({
     onError: (msg) => {
@@ -210,7 +218,7 @@ test("DirectApiRunner: runBuffered executes one-off turn without polluting chat 
     };
   });
 
-  const runner = new DirectApiRunner(createTestSettings());
+  const runner = await createRunner();
 
   // Run buffered turn (e.g. Plan engine generating plan steps)
   const schema = { type: "OBJECT", properties: { plan: { type: "ARRAY" } } };
@@ -280,9 +288,8 @@ test("DirectApiRunner: emits onThinking when reasoning content is returned", asy
 
   const settings = createTestSettings({
     directApiProvider: "deepseek",
-    deepseekApiKey: "sk-ds-key",
   });
-  const runner = new DirectApiRunner(settings);
+  const runner = await createRunner(settings, { deepseek: "sk-ds-key" });
 
   let thinkingReceived = "";
   let assistantReceived = "";

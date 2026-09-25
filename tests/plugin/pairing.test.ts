@@ -20,9 +20,9 @@ describe("Device Pairing and Token Management (S2-W4, ADR-12, PRD 1.8)", () => {
 
   describe("validateServerUrl", () => {
     it("accepts valid http and https urls and strips trailing slashes", () => {
-      const resHttp = validateServerUrl("http://100.101.102.103:8765/");
+      const resHttp = validateServerUrl("http://100.64.0.12:8765/");
       assert.equal(resHttp.ok, true);
-      assert.equal(resHttp.url, "http://100.101.102.103:8765");
+      assert.equal(resHttp.url, "http://100.64.0.12:8765");
 
       const resHttps = validateServerUrl("https://darjeeling.tailscale.net:8765");
       assert.equal(resHttps.ok, true);
@@ -37,7 +37,7 @@ describe("Device Pairing and Token Management (S2-W4, ADR-12, PRD 1.8)", () => {
       const resData = validateServerUrl("data:text/html,<html>");
       assert.equal(resData.ok, false);
 
-      const resFtp = validateServerUrl("ftp://100.101.102.103:8765");
+      const resFtp = validateServerUrl("ftp://100.64.0.12:8765");
       assert.equal(resFtp.ok, false);
 
       const resEmpty = validateServerUrl("");
@@ -93,7 +93,7 @@ describe("Device Pairing and Token Management (S2-W4, ADR-12, PRD 1.8)", () => {
       });
 
       const res = await pairDevice({
-        baseUrl: "http://100.101.102.103:8765",
+        baseUrl: "http://100.64.0.12:8765",
         code: "1234 5678",
         deviceName: "MacBook Pro",
         platform: "macos",
@@ -105,7 +105,7 @@ describe("Device Pairing and Token Management (S2-W4, ADR-12, PRD 1.8)", () => {
       assert.equal(res.api, "/api/agents");
 
       assert.ok(capturedRequest);
-      assert.equal((capturedRequest as RequestUrlParam).url, "http://100.101.102.103:8765/api/pair");
+      assert.equal((capturedRequest as RequestUrlParam).url, "http://100.64.0.12:8765/api/pair");
       assert.equal((capturedRequest as RequestUrlParam).method, "POST");
       const parsedBody = JSON.parse((capturedRequest as RequestUrlParam).body as string);
       assert.equal(parsedBody.code, "12345678");
@@ -127,7 +127,7 @@ describe("Device Pairing and Token Management (S2-W4, ADR-12, PRD 1.8)", () => {
       await assert.rejects(
         async () => {
           await pairDevice({
-            baseUrl: "http://100.101.102.103:8765",
+            baseUrl: "http://100.64.0.12:8765",
             code: "12345678",
           });
         },
@@ -154,7 +154,7 @@ describe("Device Pairing and Token Management (S2-W4, ADR-12, PRD 1.8)", () => {
       await assert.rejects(
         async () => {
           await pairDevice({
-            baseUrl: "http://100.101.102.103:8765",
+            baseUrl: "http://100.64.0.12:8765",
             code: "12345678",
           });
         },
@@ -188,7 +188,7 @@ describe("Device Pairing and Token Management (S2-W4, ADR-12, PRD 1.8)", () => {
       });
 
       const res = await verifyHostAuthentication(
-        "http://100.101.102.103:8765",
+        "http://100.64.0.12:8765",
         "secret-token-xyz"
       );
 
@@ -210,7 +210,7 @@ describe("Device Pairing and Token Management (S2-W4, ADR-12, PRD 1.8)", () => {
       });
 
       const res = await verifyHostAuthentication(
-        "http://100.101.102.103:8765",
+        "http://100.64.0.12:8765",
         "revoked-token"
       );
 
@@ -224,7 +224,7 @@ describe("Device Pairing and Token Management (S2-W4, ADR-12, PRD 1.8)", () => {
       });
 
       const res = await verifyHostAuthentication(
-        "http://100.101.102.103:8765",
+        "http://100.64.0.12:8765",
         "tok"
       );
 
@@ -255,7 +255,7 @@ describe("Device Pairing and Token Management (S2-W4, ADR-12, PRD 1.8)", () => {
         };
       });
 
-      const res = await requestPairCode("http://100.101.102.103:8765", "my-valid-bearer");
+      const res = await requestPairCode("http://100.64.0.12:8765", "my-valid-bearer");
       assert.equal(res.code, "98765432");
       assert.equal(res.expires_in, 600);
       assert.equal(capturedAuth, "Bearer my-valid-bearer");
@@ -274,7 +274,7 @@ describe("Device Pairing and Token Management (S2-W4, ADR-12, PRD 1.8)", () => {
 
       await assert.rejects(
         async () => {
-          await requestPairCode("http://100.101.102.103:8765", "bad-token");
+          await requestPairCode("http://100.64.0.12:8765", "bad-token");
         },
         /Unauthorized to generate pairing code/
       );

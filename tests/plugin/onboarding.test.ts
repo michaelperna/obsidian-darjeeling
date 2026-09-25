@@ -148,6 +148,7 @@ function makeMockPlugin(settingsOverrides = {}, storageMap: Record<string, strin
       setSecret: async (k: string, v: string) => {
         storageMap[`dj_secret_${k}`] = v;
       },
+      peek: (k: string) => storageMap[`dj_secret_${k}`] ?? "",
       generateSecretId: () => "dj_test_sec",
       storeSecretWithVerification: async (_v: string) => "dj_test_sec",
     },
@@ -241,7 +242,7 @@ test("Onboarding: host without secret routes to pair_this_device (G-36)", () => 
       {
         id: "thinkpad-1",
         name: "ThinkPad Lab",
-        baseUrl: "http://100.101.102.103:8765",
+        baseUrl: "http://100.64.0.12:8765",
         tokenSecretId: "sec-thinkpad-1",
       },
     ],
@@ -259,7 +260,7 @@ test("Onboarding: host without secret routes to pair_this_device (G-36)", () => 
 });
 
 test("Onboarding: zero-dependency SVG QR code generator", () => {
-  const deepLink = "obsidian://darjeeling?action=pair&url=http%3A%2F%2F100.101.102.103%3A8765&code=12345678";
+  const deepLink = "obsidian://darjeeling?action=pair&url=http%3A%2F%2F100.64.0.12%3A8765&code=12345678";
   const svg = generateQrSvg(deepLink, 180);
 
   assert.ok(svg.startsWith("<svg"), "Produces SVG element");

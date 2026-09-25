@@ -20,6 +20,7 @@ import {
   type ProtocolCheckResult,
 } from "../errors";
 import { toWebSocketUrl } from "./url";
+import { SecretStorage, activeTokenSecretId } from "../settings/secrets";
 import {
   getCachedLocalBinary,
   resolveDeviceRuntime,
@@ -193,6 +194,10 @@ export interface ConnectionSnapshot {
   mode: RuntimeMode;
 }
 
+function newConversationKey(): string {
+  return `conv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export class AgentClient {
   private settings: DarjeelingSettings;
   private socket: WebSocket | null = null;
@@ -203,6 +208,13 @@ export class AgentClient {
   private localAgentRunner: LocalAgentRunner;
   private vaultPath: string;
   private app?: App;
+  private secrets: SecretStorage;
+  /**
+   * Client-side id of the current chat conversation, minted at chat start and
+   * on every reset. Bypass confirmation is keyed to it, so a brand-new chat
+   * (no agent session id yet) can still run in a confirmed bypass mode.
+   */
+  private conversationKey: string = newConversationKey();
 
   /** Continuity token from the CLI, threaded into the next turn as --resume. */
   private sessionId: string | null = null;
@@ -230,11 +242,17 @@ export class AgentClient {
   private onVisibilityChangeBound: (() => void) | null = null;
   private onOnlineBound: (() => void) | null = null;
 
-  constructor(settings: DarjeelingSettings, vaultPath: string = "", app?: App) {
+  constructor(
+    settings: DarjeelingSettings,
+    vaultPath: string = "",
+    app?: App,
+    secrets?: SecretStorage
+  ) {
     this.settings = settings;
     this.vaultPath = vaultPath;
     this.app = app;
-    this.directApiRunner = new DirectApiRunner(settings);
+    this.secrets = secrets ?? new SecretStorage((app ?? {}) as App);
+    this.directApiRunner = new DirectApiRunner(settings, this.secrets);
     this.localAgentRunner = new LocalAgentRunner(settings, vaultPath);
     this.lastSnapshot = this.takeSnapshot();
 
@@ -350,69 +368,32 @@ export class AgentClient {
     return `http://${host}:${port}`;
   }
 
+  /** Host token for the active host, read from secret storage (never settings). */
   public getAuthToken(): string {
-    if (this.settings.authToken) {
-      return this.settings.authToken;
-    }
-    const activeHost = this.settings.hosts?.find(
-      (h) => h.id === this.settings.activeHostId
-    );
-    if (activeHost?.authToken) {
-      return activeHost.authToken;
-    }
-    const remoteHost = this.settings.remoteHosts?.find(
-      (h) => h.id === (this.settings.activeRemoteHostId || this.settings.activeHostId)
-    );
-    if (remoteHost?.authToken) {
-      return remoteHost.authToken;
-    }
-    const tokenSecretId = activeHost?.tokenSecretId || remoteHost?.tokenSecretId || "dj_token";
-    if (this.app) {
-      const typed = this.app as unknown as { loadLocalStorage?(k: string): string | null };
-      try {
-        const val =
-          typed.loadLocalStorage?.(`dj_secret_${tokenSecretId}`) ||
-          typed.loadLocalStorage?.("dj_secret_dj_token") ||
-          typed.loadLocalStorage?.("dj_secret_primary");
-        if (val) return val;
-      } catch {
-        /* ignore */
-      }
-    }
-    if (typeof window !== "undefined" && window.localStorage) {
-      const val =
-        window.localStorage.getItem(`dj_secret_${tokenSecretId}`) ||
-        window.localStorage.getItem("dj_secret_dj_token") ||
-        window.localStorage.getItem("dj_secret_primary");
-      if (val) return val;
-    }
-    return "";
+    return this.secrets.peek(activeTokenSecretId(this.settings));
   }
 
-  public setAuthToken(token: string): void {
-    this.settings.authToken = token;
-    const activeHost = this.settings.hosts?.find(
-      (h) => h.id === this.settings.activeHostId
-    );
-    if (activeHost) activeHost.authToken = token;
-    const remoteHost = this.settings.remoteHosts?.find(
-      (h) => h.id === (this.settings.activeRemoteHostId || this.settings.activeHostId)
-    );
-    if (remoteHost) remoteHost.authToken = token;
-    const tokenSecretId = activeHost?.tokenSecretId || remoteHost?.tokenSecretId || "dj_token";
-    if (this.app) {
-      const typed = this.app as unknown as { saveLocalStorage?(k: string, v: string): void };
-      try {
-        typed.saveLocalStorage?.(`dj_secret_${tokenSecretId}`, token);
-        typed.saveLocalStorage?.("dj_secret_dj_token", token);
-      } catch {
-        /* ignore */
-      }
+  /** Use a token already held in secret storage (no write, no reconnect). */
+  public adoptAuthToken(token: string): void {
+    this.secrets.remember(activeTokenSecretId(this.settings), token);
+  }
+
+  /**
+   * Set the active host's token: kept in secret storage only. Settings never
+   * receive a copy (data.json must not contain it).
+   */
+  public async setAuthToken(token: string): Promise<void> {
+    const id = activeTokenSecretId(this.settings);
+    this.secrets.remember(id, token);
+    this.reconnectForToken();
+    try {
+      await this.secrets.save(id, token);
+    } catch {
+      /* cache already holds it for this session */
     }
-    if (typeof window !== "undefined" && window.localStorage) {
-      window.localStorage.setItem(`dj_secret_${tokenSecretId}`, token);
-      window.localStorage.setItem("dj_secret_dj_token", token);
-    }
+  }
+
+  private reconnectForToken(): void {
     if (this.socket) {
       try {
         this.socket.close();
@@ -525,9 +506,15 @@ export class AgentClient {
     return this.resumeId;
   }
 
+  /** Client-side id of the current chat conversation (bypass confirmation key). */
+  getConversationKey(): string {
+    return this.conversationKey;
+  }
+
   /** Forget continuity so the next turn starts a fresh agent conversation. */
   resetConversation(): void {
     this.sessionId = null;
+    this.conversationKey = newConversationKey();
     this.directApiRunner.resetConversation();
     this.localAgentRunner.resetConversation();
     if (this.app) {
@@ -1192,7 +1179,7 @@ export class AgentClient {
     // Clamp permission mode against agent capabilities
     const supportedModes = getAgentPermissionModes(requested);
     const requestedPerm = options.permission_mode ?? this.settings.permissionMode;
-    const conversationId = options.resume ?? this.sessionId;
+    const conversationId = this.conversationKey;
 
     if (requestedPerm === "bypassPermissions" && !isBypassConfirmedForConversation(conversationId)) {
       options.permission_mode = "plan";

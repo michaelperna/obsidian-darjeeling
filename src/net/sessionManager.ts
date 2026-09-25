@@ -71,7 +71,10 @@ export class SessionManager {
   private settings: DarjeelingSettings;
   public lastAuthError: string | null = null;
 
-  constructor(settings: DarjeelingSettings) {
+  constructor(
+    settings: DarjeelingSettings,
+    private getToken: () => string = () => ""
+  ) {
     this.settings = settings;
   }
 
@@ -91,7 +94,7 @@ export class SessionManager {
 
   private headers(withBody = false): Record<string, string> {
     const headers: Record<string, string> = {};
-    const token = this.settings.authToken;
+    const token = this.getToken();
     if (token) {
       headers["X-Darjeeling-Token"] = token;
       headers["Authorization"] = `Bearer ${token}`;

@@ -6,7 +6,7 @@ export function createMockSettings(overrides: Partial<DarjeelingSettings> = {}):
   const host: HostConfig = {
     id: "host-1",
     name: "ThinkPad Lab",
-    baseUrl: "http://100.101.102.103:8765",
+    baseUrl: "http://100.64.0.12:8765",
     tokenSecretId: "sec-host-1",
   };
 
@@ -15,9 +15,8 @@ export function createMockSettings(overrides: Partial<DarjeelingSettings> = {}):
     runtimeMode: "remote",
     hosts: [host],
     activeHostId: "host-1",
-    meshnetHost: "100.101.102.103",
+    meshnetHost: "100.64.0.12",
     port: 8765,
-    authToken: "test-token-xyz",
     agent: "claude",
     ...overrides,
   };
