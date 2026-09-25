@@ -53,3 +53,6 @@ Thumbs.db
 # --- Test and lab artifacts ---
 tests/e2e/*-output/
 _lab/
+
+# Private scrub-guard patterns (see scripts/ci/scrub-guard.sh)
+scripts/ci/scrub-guard.patterns.local
