@@ -691,21 +691,27 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
         print("Error: Tarball is corrupt or invalid gzip archive.", file=sys.stderr)
         return 1
 
-    # Locate installer
-    installer = CURRENT_DIR / "install.sh"
-    if not installer.exists():
-        installer = Path("/usr/local/bin/install.sh")
+    # Run the installer that ships with the NEW release. The installer under
+    # /opt/darjeeling/current belongs to the release being replaced (1.0.3's
+    # was hard-coded to 1.0.0-dev and forced bypassPermissions on migrated
+    # hosts), so it must never drive an upgrade.
+    import tempfile
 
-    prev_current = CURRENT_DIR.resolve() if CURRENT_DIR.exists() else None
+    with tempfile.TemporaryDirectory(prefix="darjeeling-upgrade-") as workdir:
+        installer, why = select_upgrade_installer(tarball_path, Path(workdir))
+        if installer is None:
+            print(f"Error: {why}", file=sys.stderr)
+            return 1
+        print(f"Using installer: {why}")
 
-    # Run upgrade installer
-    cmd = ["bash", str(installer), "--tarball", str(tarball_path), "--yes"]
-    res = subprocess.run(cmd)
+        prev_current = CURRENT_DIR.resolve() if CURRENT_DIR.exists() else None
+
+        cmd = ["bash", str(installer), "--tarball", str(tarball_path), "--yes"]
+        res = subprocess.run(cmd)
 
     # Health check with automatic rollback
     port = get_server_port()
     healthy = False
-    import time
     for _ in range(15):
         time.sleep(1)
         try:
@@ -717,18 +723,120 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
         except Exception:
             pass
 
-    if not healthy and prev_current and prev_current.exists():
-        print("WARNING: Upgraded server failed health check! Initiating automatic rollback...", file=sys.stderr)
-        try:
-            CURRENT_DIR.unlink(missing_ok=True)
-            CURRENT_DIR.symlink_to(prev_current)
-            subprocess.run(["systemctl", "restart", "darjeeling.service"], check=False)
-            print("Rollback complete.")
-        except Exception as e:
-            print(f"Rollback failed: {e}", file=sys.stderr)
-        return 1
+    if healthy:
+        return res.returncode
 
-    return res.returncode
+    new_current = CURRENT_DIR.resolve() if CURRENT_DIR.exists() else None
+    print("WARNING: Upgraded server failed health check!", file=sys.stderr)
+    if prev_current is None or not prev_current.is_dir():
+        print("No previous release to roll back to. Check: journalctl -u darjeeling.service -n 50", file=sys.stderr)
+        return 1
+    if new_current == prev_current:
+        print(
+            f"The installer reinstalled {prev_current} in place, so there is no separate "
+            "release to roll back to. Check: journalctl -u darjeeling.service -n 50",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"Initiating automatic rollback to {prev_current}...", file=sys.stderr)
+    try:
+        _switch_current(prev_current)
+        subprocess.run(["systemctl", "restart", "darjeeling.service"], check=False)
+        print("Rollback complete.")
+    except Exception as e:
+        print(f"Rollback failed: {e}", file=sys.stderr)
+    return 1
+
+
+def _tarball_version(tarball_path: Path) -> Optional[str]:
+    for member in ("VERSION", "./VERSION"):
+        res = subprocess.run(["tar", "-xzOf", str(tarball_path), member], capture_output=True, text=True)
+        if res.returncode == 0 and res.stdout.strip():
+            return res.stdout.strip().splitlines()[0].strip()
+    return None
+
+
+def _stamped_version(installer: Path) -> Optional[str]:
+    """DJ_VERSION baked into an install.sh ("" when unstamped, None if unreadable)."""
+    import re
+
+    try:
+        m = re.search(r'^DJ_VERSION="([^"]*)"', installer.read_text(encoding="utf-8"), re.M)
+    except OSError:
+        return None
+    return m.group(1) if m else None
+
+
+def select_upgrade_installer(tarball_path: Path, workdir: Path):
+    """Pick the install.sh for an upgrade: never the running release's.
+
+    1. A stamped install.sh next to the tarball for the same version (it also
+       verifies the tarball's SHA-256).
+    2. The install.sh shipped inside the tarball (reads VERSION from it).
+    3. An unstamped install.sh next to the tarball.
+    Returns (path, description) or (None, error message).
+    """
+    version = _tarball_version(tarball_path)
+    side = tarball_path.parent / "install.sh"
+    side_version = _stamped_version(side) if side.is_file() else None
+    if side_version and version and side_version == version:
+        return side, f"{side} (stamped {version})"
+
+    for member in ("install.sh", "./install.sh"):
+        res = subprocess.run(
+            ["tar", "-xzf", str(tarball_path), "-C", str(workdir), member], capture_output=True
+        )
+        extracted = workdir / "install.sh"
+        if res.returncode == 0 and extracted.is_file():
+            return extracted, f"install.sh from {tarball_path.name}" + (f" ({version})" if version else "")
+
+    if side.is_file() and side_version == "":
+        return side, f"{side} (unstamped)"
+    if side.is_file():
+        return None, (
+            f"{side} is stamped for {side_version or 'an unknown version'}, not "
+            f"{version or 'this tarball'}, and the tarball has no install.sh. Download the "
+            "install.sh from the same release as the tarball."
+        )
+    return None, (
+        f"{tarball_path.name} contains no install.sh. Download install.sh from the same "
+        "release and run: sudo bash install.sh --tarball " + str(tarball_path) + " --yes"
+    )
+
+
+def _switch_current(target: Path) -> None:
+    """Point CURRENT_DIR at target atomically; remember the old target as previous."""
+    old = CURRENT_DIR.resolve() if CURRENT_DIR.exists() else None
+    tmp = CURRENT_DIR.with_name(CURRENT_DIR.name + ".tmp-rollback")
+    if tmp.is_symlink() or tmp.exists():
+        tmp.unlink()
+    tmp.symlink_to(target)
+    os.replace(tmp, CURRENT_DIR)
+    if old is not None and old != target.resolve():
+        prev = CURRENT_DIR.with_name("previous")
+        ptmp = CURRENT_DIR.with_name("previous.tmp-rollback")
+        if ptmp.is_symlink() or ptmp.exists():
+            ptmp.unlink()
+        ptmp.symlink_to(old)
+        os.replace(ptmp, prev)
+
+
+def _rollback_target() -> Optional[Path]:
+    """The release before the current one: the installer's `previous` link,
+    else the most recently modified release directory that is not current."""
+    current = CURRENT_DIR.resolve() if CURRENT_DIR.exists() else None
+    prev = CURRENT_DIR.with_name("previous")
+    if prev.is_symlink() and prev.exists():
+        target = prev.resolve()
+        if target.is_dir() and target != current:
+            return target
+    releases_dir = CURRENT_DIR.parent / "releases"
+    if not releases_dir.is_dir():
+        return None
+    others = [p for p in releases_dir.iterdir() if p.is_dir() and p.resolve() != current]
+    if not others:
+        return None
+    return max(others, key=lambda p: p.stat().st_mtime)
 
 
 def cmd_rollback(args: argparse.Namespace) -> int:
@@ -745,13 +853,11 @@ def cmd_rollback(args: argparse.Namespace) -> int:
         return 0
 
     print("Rolling back to previous release...")
-    releases = sorted([p for p in (CURRENT_DIR.parent / "releases").iterdir() if p.is_dir()])
-    if len(releases) < 2:
+    target = _rollback_target()
+    if target is None:
         print("Error: No previous release directory found.", file=sys.stderr)
         return 1
-    target = releases[-2]
-    CURRENT_DIR.unlink(missing_ok=True)
-    CURRENT_DIR.symlink_to(target)
+    _switch_current(target)
     subprocess.run(["systemctl", "restart", "darjeeling.service"], check=False)
     print(f"Rolled back to {target.name}.")
     return 0
